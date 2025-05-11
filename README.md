@@ -2,8 +2,6 @@
 
 An MCP server implementation that provides a tool for dynamic and reflective problem-solving through a structured thinking process with advanced hypothesis tracking capabilities.
 
-## 🆕 Version 1.1.0 - Enhanced Edition
-
 This version includes significant enhancements over the original implementation, combining the best features of the original modelcontextprotocol/servers architecture with powerful new hypothesis generation and verification capabilities.
 
 ## Key Enhancements
@@ -35,12 +33,38 @@ This version includes significant enhancements over the original implementation,
 - Adjust the total number of thoughts dynamically
 - Express uncertainty and explore multiple approaches
 
-### New Features (v1.1.0)
+### New Features (v1.1.0+)
 - Generate solution hypotheses with explicit marking
 - Verify hypotheses and track verification status
 - Link verifications to multiple hypotheses
 - Get comprehensive summary reports
 - Enhanced error handling and validation
+
+## Installation
+
+### Clone and Build
+
+```bash
+# Clone the repository
+git clone https://github.com/nalyk/sequentialthinking.git
+cd sequentialthinking
+
+# Install dependencies
+npm install
+
+# Build the project
+npm run build
+```
+
+### Docker Installation
+
+```bash
+# Build Docker image
+docker build -t mcp/sequentialthinking .
+
+# Run with Docker
+docker run --rm -i mcp/sequentialthinking
+```
 
 ## Tool
 
@@ -105,7 +129,7 @@ Facilitates a detailed, step-by-step thinking process for problem-solving and an
 
 ## Comparison with Original
 
-| Feature | Original modelcontextprotocol/servers | Enhanced Version (v1.1.0) |
+| Feature | Original modelcontextprotocol/servers | Enhanced Version (v1.1.0+) |
 |---------|--------------------------------------|---------------------------|
 | Architecture | Class-based | ✅ Class-based (improved) |
 | Validation | Basic | ✅ Comprehensive with detailed errors |
@@ -122,23 +146,22 @@ Facilitates a detailed, step-by-step thinking process for problem-solving and an
 
 Add this to your `claude_desktop_config.json`:
 
-#### npx (Recommended)
+#### Local Installation
 
 ```json
 {
   "mcpServers": {
     "sequential-thinking": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "-y",
-        "@modelcontextprotocol/server-sequential-thinking"
+        "/path/to/sequentialthinking/build/index.js"
       ]
     }
   }
 }
 ```
 
-#### docker
+#### Docker
 
 ```json
 {
@@ -172,7 +195,7 @@ npm run build
 
 Build Docker image:
 ```bash
-docker build -t mcp/sequentialthinking -f Dockerfile .
+docker build -t mcp/sequentialthinking .
 ```
 
 ## Example Workflow
@@ -209,7 +232,7 @@ This MCP server is licensed under the MIT License. This means you are free to us
 
 ## Contributing
 
-We welcome contributions! Please feel free to submit pull requests with improvements, bug fixes, or new features.
+We welcome contributions! Please feel free to submit pull requests with improvements, bug fixes, or new features at [https://github.com/nalyk/sequentialthinking](https://github.com/nalyk/sequentialthinking).
 
 ## Acknowledgments
 
