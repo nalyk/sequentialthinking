@@ -1,4 +1,7 @@
-# Sequential Thinking MCP Server
+<div align="center">
+  <img src="assets/logo.png" alt="Sequential Thinking Logo" width="200" height="200">
+  <h1>Sequential Thinking MCP Server</h1>
+</div>
 
 An MCP server implementation that provides a tool for dynamic and reflective problem-solving through a structured thinking process with advanced hypothesis tracking capabilities.
 
