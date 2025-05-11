@@ -112,55 +112,34 @@ class SequentialThinkingServer {
   private setupTool(): void {
     this.server.tool(
       "sequential_thinking",
-      `## WHAT
-Dynamic problem-solving tool that adapts as you think.
+      `Dynamic thinking tool for complex problem-solving that adapts to your natural reasoning process.
 
-## WHEN TO USE
-✓ SOLVE: Complex multi-step problems
-✓ PLAN: Projects with unknown scope  
-✓ ANALYZE: Issues requiring course correction
-✓ DESIGN: Solutions that need revision
+Use for problems requiring iterative thinking, hypothesis tracking, and revision.
 
-## SUPERPOWERS
-🔀 FLEX: Adjust, revise, branch anytime
-🧬 EVOLVE: Non-linear thinking paths
-🔬 VERIFY: Track and test hypotheses
+CORE PARAMETERS:
+• thought → Your current thinking step
+• next_thought_needed → Continue processing? (true/false)
+• thought_number → Current position in sequence
+• total_thoughts → Estimated total (adjustable)
 
-## ESSENTIAL PARAMETERS
-• thought → Your current step
-• next_thought_needed → Continue? (true/false)
-• thought_number → Current position
-• total_thoughts → Estimated total (flexible)
-
-## CONTROL PARAMETERS
-• is_revision → Revising previous? (true/false)
-• revises_thought → Which thought# to revise
-• branch_from_thought → Branch start point
+ADVANCED OPTIONS:
+• is_revision → Modifying previous thought
+• revises_thought → Which thought number to revise
+• branch_from_thought → Start point for alternative path
 • branch_id → Branch identifier
-• needs_more_thoughts → Need to extend?
+• thought_type → "hypothesis" | "verification"
+• related_to → Array of related thought numbers
+• verification_result → "confirmed" | "refuted" | "partial" | "pending"
 
-## HYPOTHESIS TRACKING
-• thought_type → 'hypothesis' or 'verification'
-• related_to → Which thought#s this relates to
-• verification_result → 'confirmed'/'refuted'/'partial'/'pending'
+USAGE GUIDE:
+1. Start with thought estimate
+2. Think iteratively
+3. Revise when insight emerges
+4. Branch for alternatives
+5. Track hypotheses naturally
+6. Stop when satisfied
 
-## THE WORKFLOW
-START → EXPLORE → VERIFY → CONCLUDE
-
-## THE RULES
-1. ESTIMATE FIRST: Start with a thought count (adjust later)
-2. REVISE FREELY: Question anything, anytime
-3. EXTEND ALWAYS: Add thoughts beyond estimates
-4. MARK CLEARLY: Label revisions and branches
-5. IGNORE NOISE: Skip irrelevant information
-6. HYPOTHESIS EARLY: Identify solutions quickly
-7. VERIFY THOROUGHLY: Link verifications to hypotheses
-8. ITERATE UNTIL: Continue until satisfied
-9. SUMMARIZE COMPLETELY: Show all hypothesis states
-10. END DELIBERATELY: Only stop when truly done
-
-## REMEMBER
-This tool adapts to YOUR thinking. Stay flexible, think clearly, verify thoroughly.`,
+This tool enhances your thinking process—use parameters as helpful, not prescriptive. Let your reasoning dictate the flow.`,
       {
         thought: z.string().describe("Your current thinking step"),
         nextThoughtNeeded: z.boolean().describe("Whether another thought step is needed after this"),
