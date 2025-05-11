@@ -112,63 +112,55 @@ class SequentialThinkingServer {
   private setupTool(): void {
     this.server.tool(
       "sequential_thinking",
-      `A detailed tool for dynamic and reflective problem-solving through thoughts.
-This tool helps analyze problems through a flexible thinking process that can adapt and evolve.
-Each thought can build on, question, or revise previous insights as understanding deepens.
+      `## WHAT
+Dynamic problem-solving tool that adapts as you think.
 
-When to use this tool:
-- Breaking down complex problems into steps
-- Planning and design with room for revision
-- Analysis that might need course correction
-- Problems where the full scope might not be clear initially
-- Problems that require a multi-step solution
-- Tasks that need to maintain context over multiple steps
-- Situations where irrelevant information needs to be filtered out
+## WHEN TO USE
+✓ SOLVE: Complex multi-step problems
+✓ PLAN: Projects with unknown scope  
+✓ ANALYZE: Issues requiring course correction
+✓ DESIGN: Solutions that need revision
 
-Key features:
-- You can adjust total_thoughts up or down as you progress
-- You can question or revise previous thoughts
-- You can add more thoughts even after reaching what seemed like the end
-- You can express uncertainty and explore alternative approaches
-- Not every thought needs to build linearly - you can branch or backtrack
-- Generates and tracks solution hypotheses
-- Verifies hypotheses and tracks their status
-- Repeats the process until satisfied
-- Provides a summary of conclusions and hypothesis status
+## SUPERPOWERS
+🔀 FLEX: Adjust, revise, branch anytime
+🧬 EVOLVE: Non-linear thinking paths
+🔬 VERIFY: Track and test hypotheses
 
-Parameters explained:
-- thought: Your current thinking step, which can include:
-  * Regular analytical steps
-  * Revisions of previous thoughts
-  * Questions about previous decisions
-  * Realizations about needing more analysis
-  * Changes in approach
-  * Hypothesis generation
-  * Hypothesis verification
-- next_thought_needed: True if you need more thinking, even if at what seemed like the end
-- thought_number: Current number in sequence (can go beyond initial total if needed)
-- total_thoughts: Current estimate of thoughts needed (can be adjusted up/down)
-- is_revision: A boolean indicating if this thought revises previous thinking
-- revises_thought: If is_revision is true, which thought number is being reconsidered
-- branch_from_thought: If branching, which thought number is the branching point
-- branch_id: Identifier for the current branch (if any)
-- needs_more_thoughts: If reaching end but realizing more thoughts needed
-- thought_type: (optional) 'hypothesis' or 'verification' to mark special thoughts
-- related_to: (optional) Array of thought numbers this hypothesis verification relates to
-- verification_result: (optional) 'confirmed', 'refuted', 'partial', or 'pending' for verification outcome
+## ESSENTIAL PARAMETERS
+• thought → Your current step
+• next_thought_needed → Continue? (true/false)
+• thought_number → Current position
+• total_thoughts → Estimated total (flexible)
 
-You should:
-1. Start with an initial estimate of needed thoughts, but be ready to adjust
-2. Feel free to question or revise previous thoughts
-3. Don't hesitate to add more thoughts if needed, even at the "end"
-4. Express uncertainty when present
-5. Mark thoughts that revise previous thinking or branch into new paths
-6. Ignore information that is irrelevant to the current step
-7. Generate a solution hypothesis when appropriate (use thought_type='hypothesis')
-8. Verify hypotheses by referencing them (use thought_type='verification' with related_to)
-9. Repeat the process until satisfied with the solution
-10. Process completes with a summary showing all hypotheses and their verification status
-11. Only set next_thought_needed to false when truly done and a satisfactory answer is reached`,
+## CONTROL PARAMETERS
+• is_revision → Revising previous? (true/false)
+• revises_thought → Which thought# to revise
+• branch_from_thought → Branch start point
+• branch_id → Branch identifier
+• needs_more_thoughts → Need to extend?
+
+## HYPOTHESIS TRACKING
+• thought_type → 'hypothesis' or 'verification'
+• related_to → Which thought#s this relates to
+• verification_result → 'confirmed'/'refuted'/'partial'/'pending'
+
+## THE WORKFLOW
+START → EXPLORE → VERIFY → CONCLUDE
+
+## THE RULES
+1. ESTIMATE FIRST: Start with a thought count (adjust later)
+2. REVISE FREELY: Question anything, anytime
+3. EXTEND ALWAYS: Add thoughts beyond estimates
+4. MARK CLEARLY: Label revisions and branches
+5. IGNORE NOISE: Skip irrelevant information
+6. HYPOTHESIS EARLY: Identify solutions quickly
+7. VERIFY THOROUGHLY: Link verifications to hypotheses
+8. ITERATE UNTIL: Continue until satisfied
+9. SUMMARIZE COMPLETELY: Show all hypothesis states
+10. END DELIBERATELY: Only stop when truly done
+
+## REMEMBER
+This tool adapts to YOUR thinking. Stay flexible, think clearly, verify thoroughly.`,
       {
         thought: z.string().describe("Your current thinking step"),
         nextThoughtNeeded: z.boolean().describe("Whether another thought step is needed after this"),
