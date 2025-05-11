@@ -1,24 +1,38 @@
+# Build stage
 FROM node:22.12-alpine AS builder
 
-COPY src/sequentialthinking /app
-COPY tsconfig.json /tsconfig.json
+# Install pnpm globally
+RUN npm install -g pnpm@latest
+
+# Copy source files
+COPY src /app/src
+COPY package.json pnpm-lock.yaml tsconfig.json /app/
 
 WORKDIR /app
 
-RUN --mount=type=cache,target=/root/.npm npm install
+# Install dependencies
+RUN pnpm install
 
-RUN --mount=type=cache,target=/root/.npm-production npm ci --ignore-scripts --omit-dev
+# Build the application
+RUN pnpm run build
 
+# Production stage
 FROM node:22-alpine AS release
 
-COPY --from=builder /app/dist /app/dist
-COPY --from=builder /app/package.json /app/package.json
-COPY --from=builder /app/package-lock.json /app/package-lock.json
+# Install pnpm globally
+RUN npm install -g pnpm@latest
+
+# Copy built files and package files
+COPY --from=builder /app/build /app/build
+COPY --from=builder /app/package.json /app/
+COPY --from=builder /app/pnpm-lock.yaml /app/
 
 ENV NODE_ENV=production
 
 WORKDIR /app
 
-RUN npm ci --ignore-scripts --omit-dev
+# Install production dependencies only
+RUN pnpm install --prod --frozen-lockfile
 
-ENTRYPOINT ["node", "dist/index.js"]
+# Run the application
+ENTRYPOINT ["node", "build/index.js"]
