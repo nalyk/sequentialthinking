@@ -1,0 +1,31 @@
+{
+  "server": {
+    "name": "sequential-thinking",
+    "version": "2.0.0"
+  },
+  "transports": {
+    "stdio": {
+      "enabled": true
+    },
+    "sse": {
+      "enabled": false,
+      "port": 3000,
+      "host": "localhost",
+      "path": "/sse"
+    },
+    "http": {
+      "enabled": false,
+      "port": 3000,
+      "host": "localhost",
+      "path": "/api/mcp"
+    }
+  },
+  "session": {
+    "ttl": 3600,
+    "checkPeriod": 600
+  },
+  "logging": {
+    "level": "info",
+    "prettyPrint": true
+  }
+}
