@@ -45,8 +45,8 @@ This version represents a complete modernization of the Sequential Thinking MCP 
 - **Session Persistence**: In-memory session storage with TTL support
 
 ### 🔧 Technical Excellence
-- **Multi-Transport Ready**: Supports stdio, SSE, and HTTP transports
-- **Comprehensive Logging**: Structured logging with Pino
+- **Multi-Transport Ready**: Full stdio support (production-ready), SSE (deprecated), and Streamable HTTP transports
+- **Comprehensive Logging**: Structured logging with Pino, auto-routed to stderr in stdio mode
 - **Error Recovery**: Graceful error handling with detailed messages
 - **Configuration Management**: Flexible configuration with environment variables
 
@@ -166,6 +166,86 @@ The tool facilitates detailed, step-by-step thinking processes for problem-solvi
 | Production Ready | ❌ No | ✅ **FULLY FUNCTIONAL** |
 
 ## Configuration
+
+### Transport Modes
+
+The server supports multiple transport methods:
+
+#### 1. STDIO Transport (Recommended for Claude Desktop)
+**Status: ✅ Production Ready**
+
+Default and recommended for Claude Desktop integration. Logs automatically redirect to stderr to avoid JSON-RPC corruption.
+
+```json
+{
+  "mcpServers": {
+    "sequential-thinking": {
+      "command": "node",
+      "args": ["/path/to/sequentialthinking/build/index.js"]
+    }
+  }
+}
+```
+
+#### 2. Streamable HTTP Transport
+**Status: ✅ Modern Standard**
+
+For HTTP-based integrations using the latest MCP protocol (replaces deprecated SSE).
+
+```bash
+# Enable HTTP transport
+export TRANSPORT_HTTP_ENABLED=true
+export TRANSPORT_HTTP_PORT=3001
+export TRANSPORT_HTTP_HOST=localhost
+export TRANSPORT_HTTP_PATH=/api/mcp
+
+# Start server
+node build/index.js
+```
+
+#### 3. SSE Transport (Legacy)
+**Status: ⚠️ Deprecated - Use Streamable HTTP instead**
+
+Maintained for backwards compatibility only.
+
+```bash
+# Enable SSE transport (not recommended)
+export TRANSPORT_SSE_ENABLED=true
+export TRANSPORT_SSE_PORT=3000
+export TRANSPORT_SSE_HOST=localhost
+export TRANSPORT_SSE_PATH=/sse
+
+# Start server
+node build/index.js
+```
+
+### Environment Variables
+
+```bash
+# Logging Configuration
+LOG_LEVEL=info                    # trace, debug, info, warn, error, fatal
+LOG_PRETTY_PRINT=true            # Enable pretty printing
+LOG_DISABLE_IN_STDIO=false       # Completely disable logs in stdio mode
+
+# Transport Configuration  
+TRANSPORT_STDIO_ENABLED=true     # Enable stdio transport
+TRANSPORT_HTTP_ENABLED=false     # Enable HTTP transport
+TRANSPORT_SSE_ENABLED=false      # Enable deprecated SSE transport
+
+# HTTP Transport Settings
+TRANSPORT_HTTP_HOST=localhost
+TRANSPORT_HTTP_PORT=3001
+TRANSPORT_HTTP_PATH=/api/mcp
+
+# SSE Transport Settings (Deprecated)
+TRANSPORT_SSE_HOST=localhost
+TRANSPORT_SSE_PORT=3000
+TRANSPORT_SSE_PATH=/sse
+
+# Session Configuration
+SESSION_TTL=3600                 # Session time-to-live in seconds
+SESSION_CHECK_PERIOD=60          # Session cleanup check period
+```
 
 ### Usage with Claude Desktop
 

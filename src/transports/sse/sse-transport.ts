@@ -3,14 +3,17 @@ import { Logger } from 'pino';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import config from '../../config/index.js';
+import fastify, { FastifyInstance } from 'fastify';
 
 /**
  * Implementation of the SSE transport
- * Uses the SSEServerTransport from the MCP SDK
+ * NOTE: SSE transport is DEPRECATED in favor of Streamable HTTP transport
+ * This implementation is maintained for backwards compatibility only
  */
 export class SSETransport extends BaseTransport {
-  private sseTransport: SSEServerTransport | null = null;
+  private sseTransports: Record<string, SSEServerTransport> = {};
   private server: McpServer | null = null;
+  private app: FastifyInstance | null = null;
 
   /**
    * Constructor for SSETransport
@@ -22,7 +25,7 @@ export class SSETransport extends BaseTransport {
 
   /**
    * Initialize the transport
-   * Creates the SSEServerTransport instance
+   * Creates the Fastify app and SSE endpoints
    */
   public async initialize(): Promise<void> {
     await super.initialize();
@@ -37,16 +40,49 @@ export class SSETransport extends BaseTransport {
       const host = config.get('transports.sse.host');
       const path = config.get('transports.sse.path');
       
-      // TODO: The SSEServerTransport constructor requires parameters that we need to investigate
-      // For now, we'll create a placeholder and add proper implementation later
-      this.logger.warn('SSE transport initialization is not fully implemented yet');
-      this.logger.info(`SSE transport would be configured with port: ${port}, host: ${host}, path: ${path}`);
+      this.logger.warn('SSE transport is DEPRECATED. Consider using Streamable HTTP transport instead.');
       
-      // Placeholder for the actual implementation
-      // this.sseTransport = new SSEServerTransport(...);
+      // Create Fastify app
+      this.app = fastify();
       
-      // For now, we'll mark this as initialized but not functional
-      this.enabled = false;
+      // SSE endpoint for establishing connection
+      this.app!.get(path, async (request, reply) => {
+        this.logger.debug('New SSE connection request');
+        
+        const transport = new SSEServerTransport('/messages', reply.raw);
+        const sessionId = (transport as any).sessionId || `session-${Date.now()}`;
+        this.sseTransports[sessionId] = transport;
+        
+        // Clean up on close
+        reply.raw.on('close', () => {
+          delete this.sseTransports[sessionId];
+          this.logger.debug(`SSE session ${sessionId} closed`);
+        });
+        
+        if (this.server) {
+          await this.server.connect(transport);
+          this.logger.debug(`SSE session ${sessionId} connected to server`);
+        }
+      });
+      
+      // Message endpoint for receiving client messages
+      this.app!.post('/messages', async (request, reply) => {
+        const sessionId = (request.query as any)?.sessionId as string;
+        const transport = this.sseTransports[sessionId];
+        
+        if (transport) {
+          await transport.handlePostMessage(request.raw, reply.raw, request.body);
+        } else {
+          reply.status(400).send({
+            jsonrpc: '2.0',
+            error: {
+              code: -32000,
+              message: 'No transport found for sessionId'
+            },
+            id: null
+          });
+        }
+      });
       
       this.logger.info(`SSE transport initialized on ${host}:${port}${path}`);
     } catch (error) {
@@ -57,25 +93,25 @@ export class SSETransport extends BaseTransport {
 
   /**
    * Start the transport
-   * Connects the transport to the server
+   * Starts the Fastify server
    * @param server The MCP server instance
    */
   public async start(server: McpServer): Promise<void> {
-    await super.start(server);
+    await super.start();
     
-    if (!this.isEnabled()) {
+    if (!this.isEnabled() || !this.app) {
       this.logger.info('SSE transport is disabled, skipping start');
       return;
     }
     
-    if (!this.sseTransport) {
-      throw new Error('SSE transport not initialized');
-    }
-    
     try {
       this.server = server;
-      await server.connect(this.sseTransport);
-      this.logger.info('SSE transport started');
+      const port = config.get('transports.sse.port');
+      const host = config.get('transports.sse.host');
+      
+      await this.app.listen({ port, host });
+      this.logger.info(`SSE transport started on http://${host}:${port}`);
+      
     } catch (error) {
       this.logger.error({ error }, 'Failed to start SSE transport');
       throw error;
@@ -84,18 +120,26 @@ export class SSETransport extends BaseTransport {
 
   /**
    * Stop the transport
-   * Disconnects the transport from the server
+   * Stops the Fastify server and cleans up connections
    */
   public async stop(): Promise<void> {
     await super.stop();
     
-    if (!this.isEnabled() || !this.sseTransport || !this.server) {
+    if (!this.isEnabled()) {
       return;
     }
     
     try {
-      // Currently, the SDK doesn't provide a way to disconnect a transport
-      // This is a placeholder for future SDK versions that might support it
+      // Close all SSE connections
+      for (const [sessionId] of Object.entries(this.sseTransports)) {
+        delete this.sseTransports[sessionId];
+      }
+      
+      // Close Fastify server
+      if (this.app) {
+        await this.app.close();
+      }
+      
       this.logger.info('SSE transport stopped');
     } catch (error) {
       this.logger.error({ error }, 'Failed to stop SSE transport');

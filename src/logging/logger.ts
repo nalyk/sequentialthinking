@@ -9,6 +9,13 @@ import { pino } from 'pino';
 export function createLogger() {
   const level = config.get('logging.level');
   const prettyPrint = config.get('logging.prettyPrint');
+  const stdioEnabled = config.get('transports.stdio.enabled');
+  const disableInStdio = config.get('logging.disableInStdio');
+  
+  // If stdio transport is enabled and logging is disabled for stdio, return a silent logger
+  if (stdioEnabled && disableInStdio) {
+    return pino({ level: 'silent' });
+  }
   
   const loggerOptions = {
     level,
@@ -19,7 +26,30 @@ export function createLogger() {
     }
   };
   
-  // Add pretty printing if enabled
+  // If stdio transport is enabled, we must send logs to stderr to avoid corrupting stdout JSON-RPC
+  if (stdioEnabled) {
+    if (prettyPrint) {
+      return pino({
+        ...loggerOptions,
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            destination: 2, // stderr
+            colorize: true,
+            translateTime: 'SYS:standard',
+            ignore: 'pid,hostname'
+          }
+        }
+      });
+    }
+    
+    // For stdio mode without pretty print, send structured logs to stderr
+    return pino({
+      ...loggerOptions
+    }, pino.destination(2)); // stderr
+  }
+  
+  // For non-stdio modes, use normal stdout logging
   if (prettyPrint) {
     return pino({
       ...loggerOptions,

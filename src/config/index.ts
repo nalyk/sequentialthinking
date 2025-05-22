@@ -40,6 +40,12 @@ const configSchema = convict({
       format: Boolean,
       default: true,
       env: 'LOG_PRETTY_PRINT'
+    },
+    disableInStdio: {
+      doc: 'Whether to disable logging completely when stdio transport is enabled',
+      format: Boolean,
+      default: false,
+      env: 'LOG_DISABLE_IN_STDIO'
     }
   },
   session: {
