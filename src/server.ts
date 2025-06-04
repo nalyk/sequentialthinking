@@ -20,6 +20,7 @@ export class SequentialThinkingServer {
   private transports: Transport[] = [];
   private serverLogger: any;
   private toolLogger: any;
+  private defaultSessionId: string | null = null;
 
   /**
    * Constructor for SequentialThinkingServer
@@ -87,12 +88,11 @@ export class SequentialThinkingServer {
     try {
       // Get or create session - for now, we'll use a single session per server instance
       // In a real implementation, you'd extract session from request context
-      let sessionId = 'default';
-      
-      if (!this.thinkingManager.getSession(sessionId)) {
-        sessionId = this.thinkingManager.createSession();
-        this.toolLogger.info(`Created new thinking session: ${sessionId}`);
+      if (!this.defaultSessionId || !this.thinkingManager.getSession(this.defaultSessionId)) {
+        this.defaultSessionId = this.thinkingManager.createSession();
+        this.toolLogger.info(`Created new thinking session: ${this.defaultSessionId}`);
       }
+      const sessionId = this.defaultSessionId;
       
       // Add the thought to the session
       const thoughtState = this.thinkingManager.addThought(sessionId, params);
