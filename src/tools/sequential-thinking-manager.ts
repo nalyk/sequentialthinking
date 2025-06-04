@@ -91,7 +91,10 @@ export class SequentialThinkingManager {
     }
 
     // Validate revision logic
-    if (params.isRevision && params.revisesThought) {
+    if (params.isRevision) {
+      if (!params.revisesThought) {
+        throw new Error('revisesThought is required when isRevision is true');
+      }
       const originalThought = session.thoughts.find(t => t.thoughtNumber === params.revisesThought);
       if (!originalThought) {
         throw new Error(`Cannot revise non-existent thought ${params.revisesThought}`);
