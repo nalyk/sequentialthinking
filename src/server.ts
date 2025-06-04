@@ -9,34 +9,35 @@ import { ThoughtParams } from './types/thinking.js';
 import config from './config/index.js';
 
 const SEQUENTIAL_THINKING_DESCRIPTION = `
-Iterative reasoning tool for exploring complex problems step by step. Use numbered
-thoughts to record ideas, mark revisions, create branches and track hypotheses.
+Structured tool for step-by-step reasoning with support for revisions, branching,
+and hypothesis verification. Use numbered thoughts to maintain context while
+exploring solutions.
 
 When to use:
-- planning or analysis that might change as you learn
-- multi-step problems where context must be preserved
-- situations that benefit from tracking hypotheses and their verification
+- Breaking down complex problems or plans
+- Tasks that may evolve as you learn more
+- Situations where hypotheses should be tracked and verified
 
 Guidelines:
-1. Start with an estimated totalThoughts but adjust as needed
-2. Provide thoughtNumber for each step and set nextThoughtNeeded to false only when done
-3. Mark isRevision and revisesThought when rethinking earlier work
-4. Use branchFromThought and branchId to explore alternative approaches
-5. Set thoughtType to “hypothesis” or “verification”; include relatedTo and verificationResult for verifications
-6. Use needsMoreThoughts when additional analysis might be required
+1. Estimate totalThoughts but adjust as new information appears.
+2. Provide a thoughtNumber for every step and set nextThoughtNeeded to false only when finished.
+3. Mark isRevision and revisesThought when correcting or updating earlier ideas.
+4. Use branchFromThought and branchId to explore alternatives or side paths.
+5. Set thoughtType to "hypothesis" or "verification"; include relatedTo and verificationResult when verifying.
+6. Use needsMoreThoughts if additional analysis may be required beyond the current plan.
 
 Parameters:
-- thought: string content of the current step
-- nextThoughtNeeded: boolean flag to continue
-- thoughtNumber: integer sequence number
-- totalThoughts: integer estimate of total steps
-- isRevision?: boolean to mark a revision
-- revisesThought?: integer identifying the revised thought
-- branchFromThought?: integer if this starts a branch
-- branchId?: string identifier for the branch
-- needsMoreThoughts?: boolean indicating more analysis is required
+- thought: text of the current step
+- nextThoughtNeeded: whether another thought is required
+- thoughtNumber: index of this thought in the sequence
+- totalThoughts: estimated total number of thoughts
+- isRevision?: marks a revision of prior thinking
+- revisesThought?: number of the thought being revised
+- branchFromThought?: starting thought number for a branch
+- branchId?: identifier for the branch
+- needsMoreThoughts?: indicates further analysis might be needed
 - thoughtType?: "hypothesis" | "verification"
-- relatedTo?: number[] of hypotheses being verified
+- relatedTo?: array of hypothesis numbers being verified
 - verificationResult?: "confirmed" | "refuted" | "partial" | "pending"`;
 
 /**
