@@ -9,12 +9,35 @@ import { ThoughtParams } from './types/thinking.js';
 import config from './config/index.js';
 
 const SEQUENTIAL_THINKING_DESCRIPTION = `
-Structured reasoning tool for step-by-step problem solving with hypothesis tracking.
-Use it to break down complex tasks into numbered thoughts, revise or branch when
-necessary, and mark hypotheses for later verification.
+Iterative reasoning tool for exploring complex problems step by step. Use numbered
+thoughts to record ideas, mark revisions, create branches and track hypotheses.
 
-Key parameters:\n
-- thought: the current thinking step\n- nextThoughtNeeded: set to false when finished\n- thoughtNumber: position of this thought\n- totalThoughts: estimated total (can change)\n- isRevision: mark true when revising a prior thought\n- revisesThought: which thought is revised\n- branchFromThought: branching point\n- branchId: identifier for a branch\n- needsMoreThoughts: indicate more analysis may be required\n- thoughtType: "hypothesis" or "verification"\n- relatedTo: hypotheses this verification relates to\n- verificationResult: result of verification`;
+When to use:
+- planning or analysis that might change as you learn
+- multi-step problems where context must be preserved
+- situations that benefit from tracking hypotheses and their verification
+
+Guidelines:
+1. Start with an estimated totalThoughts but adjust as needed
+2. Provide thoughtNumber for each step and set nextThoughtNeeded to false only when done
+3. Mark isRevision and revisesThought when rethinking earlier work
+4. Use branchFromThought and branchId to explore alternative approaches
+5. Set thoughtType to “hypothesis” or “verification”; include relatedTo and verificationResult for verifications
+6. Use needsMoreThoughts when additional analysis might be required
+
+Parameters:
+- thought: string content of the current step
+- nextThoughtNeeded: boolean flag to continue
+- thoughtNumber: integer sequence number
+- totalThoughts: integer estimate of total steps
+- isRevision?: boolean to mark a revision
+- revisesThought?: integer identifying the revised thought
+- branchFromThought?: integer if this starts a branch
+- branchId?: string identifier for the branch
+- needsMoreThoughts?: boolean indicating more analysis is required
+- thoughtType?: "hypothesis" | "verification"
+- relatedTo?: number[] of hypotheses being verified
+- verificationResult?: "confirmed" | "refuted" | "partial" | "pending"`;
 
 /**
  * Sequential Thinking MCP Server
