@@ -13,6 +13,8 @@
 
 This version represents a complete modernization of the Sequential Thinking MCP Server, implementing all promised features with proper MCP SDK integration and full functionality.
 
+This project now targets **MCP SDK v1.12.1** and the **2025-03-26 protocol specification**, bringing the latest authorization flow improvements and SSE headers support.
+
 ## 🎯 Implementation Status
 
 **✅ COMPLETE IMPLEMENTATION (v2.0.0)**
@@ -207,6 +209,8 @@ node build/index.js
 **Status: ⚠️ Deprecated - Use Streamable HTTP instead**
 
 Maintained for backwards compatibility only.
+
+Starting with **SDK v1.12.1**, this transport can forward custom request headers during the connection start phase.
 
 ```bash
 # Enable SSE transport (not recommended)
