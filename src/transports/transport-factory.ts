@@ -1,5 +1,4 @@
 import { Transport } from './transport.interface.js';
-import config from '../config/index.js';
 import { Logger } from 'pino';
 
 /**
@@ -25,7 +24,7 @@ export class TransportFactory {
     const transports: Transport[] = [];
     
     // Check if stdio transport is enabled
-    if (config.get('transports.stdio.enabled')) {
+    if (process.env.TRANSPORT_STDIO_ENABLED !== 'false') {
       try {
         const StdioTransport = (await import('./stdio/stdio-transport.js')).StdioTransport;
         const stdioTransport = new StdioTransport(this.logger);
@@ -37,7 +36,7 @@ export class TransportFactory {
     }
     
     // Check if SSE transport is enabled
-    if (config.get('transports.sse.enabled')) {
+    if (process.env.TRANSPORT_SSE_ENABLED === 'true') {
       try {
         const SSETransport = (await import('./sse/sse-transport.js')).SSETransport;
         const sseTransport = new SSETransport(this.logger);
@@ -49,7 +48,7 @@ export class TransportFactory {
     }
     
     // Check if HTTP transport is enabled
-    if (config.get('transports.http.enabled')) {
+    if (process.env.TRANSPORT_HTTP_ENABLED === 'true') {
       try {
         const HTTPTransport = (await import('./http/http-transport.js')).HTTPTransport;
         const httpTransport = new HTTPTransport(this.logger);

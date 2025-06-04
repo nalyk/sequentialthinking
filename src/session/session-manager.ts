@@ -1,7 +1,6 @@
 import NodeCache from 'node-cache';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from 'pino';
-import config from '../config/index.js';
 
 /**
  * Session data interface
@@ -26,8 +25,8 @@ export class SessionManager {
    * @param logger The logger instance
    */
   constructor(logger: Logger) {
-    const ttl = config.get('session.ttl');
-    const checkPeriod = config.get('session.checkPeriod');
+    const ttl = parseInt(process.env.SESSION_TTL || '3600');
+    const checkPeriod = parseInt(process.env.SESSION_CHECK_PERIOD || '60');
     
     this.cache = new NodeCache({
       stdTTL: ttl,

@@ -1,13 +1,12 @@
 import { SequentialThinkingServer } from './server.js';
 import { logger } from './logging/logger.js';
-import config from './config/index.js';
 
 /**
  * Main entry point for the Sequential Thinking MCP Server
  */
 async function main() {
   try {
-    logger.info(`Starting Sequential Thinking MCP Server v${config.get('server.version')}`);
+    logger.info(`Starting Sequential Thinking MCP Server v${process.env.SERVER_VERSION || '2.0.0'}`);
     
     // Create server instance
     const server = new SequentialThinkingServer();

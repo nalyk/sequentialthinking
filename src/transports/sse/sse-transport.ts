@@ -2,7 +2,6 @@ import { BaseTransport } from '../base-transport.js';
 import { Logger } from 'pino';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import config from '../../config/index.js';
 import fastify, { FastifyInstance } from 'fastify';
 
 /**
@@ -36,9 +35,9 @@ export class SSETransport extends BaseTransport {
     }
     
     try {
-      const port = config.get('transports.sse.port');
-      const host = config.get('transports.sse.host');
-      const path = config.get('transports.sse.path');
+      const port = parseInt(process.env.TRANSPORT_SSE_PORT || '3000');
+      const host = process.env.TRANSPORT_SSE_HOST || 'localhost';
+      const path = process.env.TRANSPORT_SSE_PATH || '/sse';
       
       this.logger.warn('SSE transport is DEPRECATED. Consider using Streamable HTTP transport instead.');
       
@@ -106,8 +105,8 @@ export class SSETransport extends BaseTransport {
     
     try {
       this.server = server;
-      const port = config.get('transports.sse.port');
-      const host = config.get('transports.sse.host');
+      const port = parseInt(process.env.TRANSPORT_SSE_PORT || '3000');
+      const host = process.env.TRANSPORT_SSE_HOST || 'localhost';
       
       await this.app.listen({ port, host });
       this.logger.info(`SSE transport started on http://${host}:${port}`);

@@ -1,8 +1,16 @@
 import convict from 'convict';
 import dotenv from 'dotenv';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 // Load environment variables from .env file
 dotenv.config();
+
+// Get package.json for dynamic version
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf-8'));
 
 /**
  * Configuration schema for the application
@@ -18,13 +26,13 @@ const configSchema = convict({
     name: {
       doc: 'The name of the server',
       format: String,
-      default: 'Sequential Thinking MCP Server',
+      default: packageJson.name || 'Sequential Thinking MCP Server',
       env: 'SERVER_NAME'
     },
     version: {
       doc: 'The version of the server',
       format: String,
-      default: '2.0.0',
+      default: packageJson.version || '2.0.0',
       env: 'SERVER_VERSION'
     }
   },

@@ -1,6 +1,5 @@
 import { BaseTransport } from '../base-transport.js';
 import { Logger } from 'pino';
-import config from '../../config/index.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -37,9 +36,9 @@ export class HTTPTransport extends BaseTransport {
     }
     
     try {
-      const port = config.get('transports.http.port');
-      const host = config.get('transports.http.host');
-      const path = config.get('transports.http.path');
+      const port = parseInt(process.env.TRANSPORT_HTTP_PORT || '3001');
+      const host = process.env.TRANSPORT_HTTP_HOST || 'localhost';
+      const path = process.env.TRANSPORT_HTTP_PATH || '/api/mcp';
       
       // Create Fastify app  
       this.app = fastify();
@@ -140,8 +139,8 @@ export class HTTPTransport extends BaseTransport {
     
     try {
       this.server = server;
-      const port = config.get('transports.http.port');
-      const host = config.get('transports.http.host');
+      const port = parseInt(process.env.TRANSPORT_HTTP_PORT || '3001');
+      const host = process.env.TRANSPORT_HTTP_HOST || 'localhost';
       
       await this.app.listen({ port, host });
       this.logger.info(`Streamable HTTP transport started on http://${host}:${port}`);

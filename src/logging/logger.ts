@@ -1,4 +1,3 @@
-import config from '../config/index.js';
 // Import pino correctly for ES modules
 import { pino } from 'pino';
 
@@ -7,10 +6,11 @@ import { pino } from 'pino';
  * @returns The logger instance
  */
 export function createLogger() {
-  const level = config.get('logging.level');
-  const prettyPrint = config.get('logging.prettyPrint');
-  const stdioEnabled = config.get('transports.stdio.enabled');
-  const disableInStdio = config.get('logging.disableInStdio');
+  // Get configuration from environment variables to avoid circular dependency
+  const level = process.env.LOG_LEVEL || 'info';
+  const prettyPrint = process.env.LOG_PRETTY_PRINT !== 'false';
+  const stdioEnabled = process.env.TRANSPORT_STDIO_ENABLED !== 'false';
+  const disableInStdio = process.env.LOG_DISABLE_IN_STDIO === 'true';
   
   // If stdio transport is enabled and logging is disabled for stdio, return a silent logger
   if (stdioEnabled && disableInStdio) {
@@ -22,7 +22,7 @@ export function createLogger() {
     timestamp: pino.stdTimeFunctions.isoTime,
     base: {
       app: 'sequential-thinking',
-      version: config.get('server.version')
+      version: process.env.SERVER_VERSION || '2.0.0'
     }
   };
   

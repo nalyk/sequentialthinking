@@ -1,5 +1,4 @@
 import { Transport } from './transport.interface.js';
-import config from '../config/index.js';
 import { Logger } from 'pino';
 
 /**
@@ -85,11 +84,11 @@ export abstract class BaseTransport implements Transport {
   private getEnabledFromConfig(): boolean {
     switch (this.type) {
       case 'stdio':
-        return config.get('transports.stdio.enabled');
+        return process.env.TRANSPORT_STDIO_ENABLED !== 'false';
       case 'sse':
-        return config.get('transports.sse.enabled');
+        return process.env.TRANSPORT_SSE_ENABLED === 'true';
       case 'http':
-        return config.get('transports.http.enabled');
+        return process.env.TRANSPORT_HTTP_ENABLED === 'true';
       default:
         return false;
     }
