@@ -63,25 +63,30 @@ export class SequentialThinkingServer {
    * Set up the sequential thinking tool using the proper SDK API
    */
   private setupSequentialThinkingTool(): void {
-    const sequentialThinkingParams = {
-      thought: z.string().describe('Your current thinking step'),
-      nextThoughtNeeded: z.boolean().describe('Whether another thought step is needed after this'),
-      thoughtNumber: z.number().int().min(1).describe('The index of this thought in the sequence'),
-      totalThoughts: z.number().int().min(1).describe('The estimated total number of thoughts planned'),
-      isRevision: z.boolean().optional().describe('True if revising a previous thought'),
-      revisesThought: z.number().int().min(1).optional().describe('If revising, the thought number being revised'),
-      branchFromThought: z.number().int().min(1).optional().describe('If branching, the thought number this branch starts from'),
-      branchId: z.string().optional().describe('Identifier for the thought branch (if any)'),
-      needsMoreThoughts: z.boolean().optional().describe('If true, the process likely needs more thoughts than initially estimated'),
-      thoughtType: z.enum(['hypothesis', 'verification']).optional().describe('The type of thought: hypothesis or verification'),
-      relatedTo: z.array(z.number().int().min(1)).optional().describe('Array of thought numbers this relates to'),
-      verificationResult: z.enum(['confirmed', 'refuted', 'partial', 'pending']).optional().describe('Result of verification (only used with thoughtType=verification)')
-    };
+    const sequentialThinkingSchema = z
+      .object({
+        thought: z.string().describe('Your current thinking step'),
+        nextThoughtNeeded: z.boolean().describe('Whether another thought step is needed after this'),
+        thoughtNumber: z.number().int().min(1).describe('The index of this thought in the sequence'),
+        totalThoughts: z.number().int().min(1).describe('The estimated total number of thoughts planned'),
+        isRevision: z.boolean().optional().describe('True if revising a previous thought'),
+        revisesThought: z.number().int().min(1).optional().describe('If revising, the thought number being revised'),
+        branchFromThought: z.number().int().min(1).optional().describe('If branching, the thought number this branch starts from'),
+        branchId: z.string().optional().describe('Identifier for the thought branch (if any)'),
+        needsMoreThoughts: z.boolean().optional().describe('If true, the process likely needs more thoughts than initially estimated'),
+        thoughtType: z.enum(['hypothesis', 'verification']).optional().describe('The type of thought: hypothesis or verification'),
+        relatedTo: z.array(z.number().int().min(1)).optional().describe('Array of thought numbers this relates to'),
+        verificationResult: z
+          .enum(['confirmed', 'refuted', 'partial', 'pending'])
+          .optional()
+          .describe('Result of verification (only used with thoughtType=verification)')
+      })
+      .describe(SEQUENTIAL_THINKING_DESCRIPTION);
 
     this.server.tool(
       "sequential_thinking",
       SEQUENTIAL_THINKING_DESCRIPTION,
-      sequentialThinkingParams,
+      sequentialThinkingSchema.shape,
       async (params) => this.handleSequentialThinking(params)
     );
     
