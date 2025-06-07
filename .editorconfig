@@ -1,0 +1,6 @@
+# EditorConfig helps maintain consistent coding styles
+root = true
+
+# Set default newline for ts and json
+[*.{ts,json}]
+insert_final_newline = true
