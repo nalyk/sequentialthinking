@@ -58,6 +58,10 @@ interface SequenceThoughtData extends ThoughtData {
   loadSequence?: {
     id: string;
   };
+  searchSequence?: {
+    query?: string;
+    limit?: number;
+  };
 }
 
 class SequentialThinkingServer {
@@ -93,6 +97,42 @@ class SequentialThinkingServer {
   private sanitizeThoughtContent(content: string): string {
     // Remove potentially harmful characters that could interfere with terminal output
     return content.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+  }
+
+  private normalizeDiacritics(text: string): string {
+    // Normalize Romanian diacritics
+    const romanianMap: { [key: string]: string } = {
+      'ă': 'a', 'â': 'a', 'î': 'i', 'ș': 's', 'ţ': 't', 'ț': 't',
+      'Ă': 'A', 'Â': 'A', 'Î': 'I', 'Ș': 'S', 'Ţ': 'T', 'Ț': 'T'
+    };
+    
+    // Normalize Russian/Cyrillic common characters (basic transliteration)
+    const cyrillicMap: { [key: string]: string } = {
+      'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+      'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+      'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+      'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+      'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+      'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
+      'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
+      'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
+      'Ф': 'F', 'Х': 'H', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch',
+      'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
+    };
+
+    let normalized = text.toLowerCase();
+    
+    // Apply Romanian diacritics normalization
+    for (const [diacritic, replacement] of Object.entries(romanianMap)) {
+      normalized = normalized.replace(new RegExp(diacritic, 'g'), replacement.toLowerCase());
+    }
+    
+    // Apply Cyrillic transliteration
+    for (const [cyrillic, replacement] of Object.entries(cyrillicMap)) {
+      normalized = normalized.replace(new RegExp(cyrillic, 'g'), replacement.toLowerCase());
+    }
+    
+    return normalized;
   }
 
   private initializeDatabase(): void {
@@ -304,6 +344,133 @@ class SequentialThinkingServer {
     });
   }
 
+  private calculateFuzzyScore(query: string, target: string): number {
+    const normalizedQuery = this.normalizeDiacritics(query);
+    const normalizedTarget = this.normalizeDiacritics(target);
+    
+    // Exact match gets highest score
+    if (normalizedTarget === normalizedQuery) {
+      return 100;
+    }
+    
+    // Contains match gets high score
+    if (normalizedTarget.includes(normalizedQuery)) {
+      return 80;
+    }
+    
+    // Word boundary match gets medium score
+    const words = normalizedTarget.split(/\s+/);
+    for (const word of words) {
+      if (word.startsWith(normalizedQuery)) {
+        return 60;
+      }
+    }
+    
+    // Simple fuzzy matching using common subsequence
+    const commonSubsequenceLength = this.longestCommonSubsequence(normalizedQuery, normalizedTarget);
+    const similarity = (commonSubsequenceLength * 2) / (normalizedQuery.length + normalizedTarget.length);
+    
+    return Math.round(similarity * 40); // Max 40 points for fuzzy match
+  }
+
+  private longestCommonSubsequence(str1: string, str2: string): number {
+    const m = str1.length;
+    const n = str2.length;
+    const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+    
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (str1[i - 1] === str2[j - 1]) {
+          dp[i][j] = dp[i - 1][j - 1] + 1;
+        } else {
+          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        }
+      }
+    }
+    
+    return dp[m][n];
+  }
+
+  private async searchSequences(query?: string, limit: number = 10): Promise<{ sequences: SequenceRecord[], totalCount: number }> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      // If no query provided, list all sequences
+      if (!query || query.trim() === '') {
+        this.db.all(
+          'SELECT * FROM sequences ORDER BY lastModified DESC LIMIT ?',
+          [limit],
+          (err: Error | null, rows: any[]) => {
+            if (err) {
+              reject(err);
+            } else {
+              const sequences: SequenceRecord[] = rows.map(row => ({
+                id: row.id,
+                title: row.title,
+                description: row.description,
+                created: new Date(row.created),
+                lastModified: new Date(row.lastModified),
+                status: row.status,
+                thoughtCount: row.thoughtCount
+              }));
+              resolve({ sequences, totalCount: sequences.length });
+            }
+          }
+        );
+        return;
+      }
+
+      // Search with fuzzy matching
+      this.db.all(
+        'SELECT * FROM sequences',
+        [],
+        (err: Error | null, rows: any[]) => {
+          if (err) {
+            reject(err);
+          } else {
+            const sequences: SequenceRecord[] = rows.map(row => ({
+              id: row.id,
+              title: row.title,
+              description: row.description,
+              created: new Date(row.created),
+              lastModified: new Date(row.lastModified),
+              status: row.status,
+              thoughtCount: row.thoughtCount
+            }));
+
+            // Calculate fuzzy scores and filter
+            const scoredSequences = sequences.map(seq => {
+              const titleScore = this.calculateFuzzyScore(query, seq.title);
+              const descriptionScore = seq.description ? this.calculateFuzzyScore(query, seq.description) : 0;
+              const maxScore = Math.max(titleScore, descriptionScore);
+              
+              return {
+                sequence: seq,
+                score: maxScore,
+                titleScore,
+                descriptionScore
+              };
+            }).filter(item => item.score > 20) // Only show sequences with reasonable match
+              .sort((a, b) => {
+                // Sort by score first, then by lastModified
+                if (a.score !== b.score) {
+                  return b.score - a.score;
+                }
+                return b.sequence.lastModified.getTime() - a.sequence.lastModified.getTime();
+              })
+              .slice(0, limit);
+
+            const results = scoredSequences.map(item => item.sequence);
+            resolve({ sequences: results, totalCount: results.length });
+          }
+        }
+      );
+    });
+  }
+
   private validateSequenceThoughtData(input: unknown): SequenceThoughtData {
     if (!input || typeof input !== 'object') {
       throw new Error('Invalid input: must be an object');
@@ -339,6 +506,19 @@ class SequentialThinkingServer {
       }
     }
 
+    if (data.searchSequence !== undefined) {
+      if (typeof data.searchSequence !== 'object' || data.searchSequence === null) {
+        throw new Error('Invalid searchSequence: must be an object');
+      }
+      const searchData = data.searchSequence as Record<string, unknown>;
+      if (searchData.query !== undefined && (typeof searchData.query !== 'string' || searchData.query.length === 0)) {
+        throw new Error('Invalid searchSequence.query: must be a non-empty string');
+      }
+      if (searchData.limit !== undefined && (typeof searchData.limit !== 'number' || searchData.limit < 1 || searchData.limit > 50)) {
+        throw new Error('Invalid searchSequence.limit: must be a number between 1 and 50');
+      }
+    }
+
     // Validate base thought data
     const baseData = this.validateThoughtData(data);
 
@@ -346,7 +526,8 @@ class SequentialThinkingServer {
       ...baseData,
       sequenceId: data.sequenceId as string | undefined,
       saveSequence: data.saveSequence as { title: string; description?: string } | undefined,
-      loadSequence: data.loadSequence as { id: string } | undefined
+      loadSequence: data.loadSequence as { id: string } | undefined,
+      searchSequence: data.searchSequence as { query?: string; limit?: number } | undefined
     };
   }
 
@@ -559,6 +740,37 @@ class SequentialThinkingServer {
   public async processThought(input: unknown): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
     try {
       const validatedInput = this.validateSequenceThoughtData(input);
+
+      // Handle sequence searching if requested
+      if (validatedInput.searchSequence) {
+        const searchResults = await this.searchSequences(
+          validatedInput.searchSequence.query,
+          validatedInput.searchSequence.limit || 10
+        );
+        
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              action: 'sequences_searched',
+              query: validatedInput.searchSequence.query || null,
+              results: searchResults.sequences.map(seq => ({
+                id: seq.id,
+                title: seq.title,
+                description: seq.description,
+                thoughtCount: seq.thoughtCount,
+                status: seq.status,
+                created: seq.created,
+                lastModified: seq.lastModified
+              })),
+              totalCount: searchResults.totalCount,
+              message: validatedInput.searchSequence.query 
+                ? `Found ${searchResults.totalCount} sequences matching "${validatedInput.searchSequence.query}"`
+                : `Listed ${searchResults.totalCount} sequences`
+            }, null, 2)
+          }]
+        };
+      }
 
       // Handle sequence loading if requested
       if (validatedInput.loadSequence) {
@@ -887,6 +1099,23 @@ You should:
         },
         required: ["id"],
         description: "Load a previously saved sequence"
+      },
+      searchSequence: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Search query for sequence titles and descriptions (optional - if not provided, lists all sequences)",
+            minLength: 1
+          },
+          limit: {
+            type: "integer",
+            description: "Maximum number of results to return (default: 10)",
+            minimum: 1,
+            maximum: 50
+          }
+        },
+        description: "Search for sequences by title/description or list all sequences"
       }
     },
     required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"]
