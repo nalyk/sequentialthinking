@@ -9,6 +9,13 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 // Fixed chalk import for ESM
 import chalk from 'chalk';
+import sqlite3 from 'sqlite3';
+import { promisify } from 'util';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 interface ThoughtData {
   thought: string;
@@ -25,6 +32,34 @@ interface ThoughtData {
   relatedTo?: number[];
 }
 
+interface SequenceRecord {
+  id: string;
+  title: string;
+  description?: string;
+  created: Date;
+  lastModified: Date;
+  status: 'active' | 'completed' | 'archived';
+  thoughtCount: number;
+}
+
+interface ThoughtRecord extends ThoughtData {
+  id: string;
+  sequenceId: string;
+  created: Date;
+  modified: Date;
+}
+
+interface SequenceThoughtData extends ThoughtData {
+  sequenceId?: string;
+  saveSequence?: {
+    title: string;
+    description?: string;
+  };
+  loadSequence?: {
+    id: string;
+  };
+}
+
 class SequentialThinkingServer {
   private thoughtHistory: ThoughtData[] = [];
   private branches: Record<string, ThoughtData[]> = {};
@@ -32,12 +67,15 @@ class SequentialThinkingServer {
   private readonly maxThoughtHistory: number;
   private readonly maxBranches: number;
   private readonly maxThoughtsPerBranch: number;
+  private db: sqlite3.Database | null = null;
+  private currentSequenceId: string | null = null;
 
   constructor() {
     this.disableThoughtLogging = (process.env.DISABLE_THOUGHT_LOGGING || "").toLowerCase() === "true";
     this.maxThoughtHistory = parseInt(process.env.MAX_THOUGHT_HISTORY || "1000", 10);
     this.maxBranches = parseInt(process.env.MAX_BRANCHES || "50", 10);
     this.maxThoughtsPerBranch = parseInt(process.env.MAX_THOUGHTS_PER_BRANCH || "100", 10);
+    this.initializeDatabase();
   }
 
   private isValidThoughtType(value: unknown): value is 'hypothesis' | 'verification' {
@@ -55,6 +93,261 @@ class SequentialThinkingServer {
   private sanitizeThoughtContent(content: string): string {
     // Remove potentially harmful characters that could interfere with terminal output
     return content.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+  }
+
+  private initializeDatabase(): void {
+    try {
+      const dbPath = path.join(__dirname, 'sequences.db');
+      this.db = new sqlite3.Database(dbPath);
+      
+      // Create tables if they don't exist
+      this.db.serialize(() => {
+        this.db!.run(`
+          CREATE TABLE IF NOT EXISTS sequences (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            description TEXT,
+            created DATETIME DEFAULT CURRENT_TIMESTAMP,
+            lastModified DATETIME DEFAULT CURRENT_TIMESTAMP,
+            status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed', 'archived')),
+            thoughtCount INTEGER DEFAULT 0
+          )
+        `);
+
+        this.db!.run(`
+          CREATE TABLE IF NOT EXISTS thoughts (
+            id TEXT PRIMARY KEY,
+            sequenceId TEXT NOT NULL,
+            thought TEXT NOT NULL,
+            thoughtNumber INTEGER NOT NULL,
+            totalThoughts INTEGER NOT NULL,
+            isRevision BOOLEAN DEFAULT 0,
+            revisesThought INTEGER,
+            branchFromThought INTEGER,
+            branchId TEXT,
+            needsMoreThoughts BOOLEAN DEFAULT 0,
+            nextThoughtNeeded BOOLEAN NOT NULL,
+            thoughtType TEXT CHECK (thoughtType IN ('hypothesis', 'verification')),
+            verificationResult TEXT CHECK (verificationResult IN ('confirmed', 'refuted', 'partial', 'pending')),
+            relatedTo TEXT, -- JSON array of numbers
+            created DATETIME DEFAULT CURRENT_TIMESTAMP,
+            modified DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (sequenceId) REFERENCES sequences (id) ON DELETE CASCADE
+          )
+        `);
+
+        this.db!.run(`
+          CREATE INDEX IF NOT EXISTS idx_thoughts_sequence ON thoughts(sequenceId);
+        `);
+
+        this.db!.run(`
+          CREATE INDEX IF NOT EXISTS idx_thoughts_number ON thoughts(sequenceId, thoughtNumber);
+        `);
+      });
+    } catch (error) {
+      console.error('Failed to initialize database:', error);
+    }
+  }
+
+  private generateId(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+
+  private async createSequence(title: string, description?: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      const id = this.generateId();
+      const now = new Date().toISOString();
+      
+      this.db.run(
+        'INSERT INTO sequences (id, title, description, created, lastModified) VALUES (?, ?, ?, ?, ?)',
+        [id, title, description || null, now, now],
+        function(err: Error | null) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(id);
+          }
+        }
+      );
+    });
+  }
+
+  private async loadSequence(id: string): Promise<SequenceRecord | null> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      this.db.get(
+        'SELECT * FROM sequences WHERE id = ?',
+        [id],
+        (err: Error | null, row: any) => {
+          if (err) {
+            reject(err);
+          } else if (!row) {
+            resolve(null);
+          } else {
+            resolve({
+              id: row.id,
+              title: row.title,
+              description: row.description,
+              created: new Date(row.created),
+              lastModified: new Date(row.lastModified),
+              status: row.status,
+              thoughtCount: row.thoughtCount
+            });
+          }
+        }
+      );
+    });
+  }
+
+  private async loadSequenceThoughts(sequenceId: string): Promise<ThoughtRecord[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      this.db.all(
+        'SELECT * FROM thoughts WHERE sequenceId = ? ORDER BY thoughtNumber ASC',
+        [sequenceId],
+        (err: Error | null, rows: any[]) => {
+          if (err) {
+            reject(err);
+          } else {
+            const thoughts: ThoughtRecord[] = rows.map(row => ({
+              id: row.id,
+              sequenceId: row.sequenceId,
+              thought: row.thought,
+              thoughtNumber: row.thoughtNumber,
+              totalThoughts: row.totalThoughts,
+              isRevision: Boolean(row.isRevision),
+              revisesThought: row.revisesThought,
+              branchFromThought: row.branchFromThought,
+              branchId: row.branchId,
+              needsMoreThoughts: Boolean(row.needsMoreThoughts),
+              nextThoughtNeeded: Boolean(row.nextThoughtNeeded),
+              thoughtType: row.thoughtType,
+              verificationResult: row.verificationResult,
+              relatedTo: row.relatedTo ? JSON.parse(row.relatedTo) : undefined,
+              created: new Date(row.created),
+              modified: new Date(row.modified)
+            }));
+            resolve(thoughts);
+          }
+        }
+      );
+    });
+  }
+
+  private async saveThought(thought: ThoughtData, sequenceId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      const thoughtId = this.generateId();
+      const now = new Date().toISOString();
+      
+      this.db.run(
+        `INSERT INTO thoughts (
+          id, sequenceId, thought, thoughtNumber, totalThoughts,
+          isRevision, revisesThought, branchFromThought, branchId,
+          needsMoreThoughts, nextThoughtNeeded, thoughtType,
+          verificationResult, relatedTo, created, modified
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          thoughtId, sequenceId, thought.thought, thought.thoughtNumber, thought.totalThoughts,
+          thought.isRevision ? 1 : 0, thought.revisesThought, thought.branchFromThought, thought.branchId,
+          thought.needsMoreThoughts ? 1 : 0, thought.nextThoughtNeeded ? 1 : 0, thought.thoughtType,
+          thought.verificationResult, thought.relatedTo ? JSON.stringify(thought.relatedTo) : null, now, now
+        ],
+        function(err: Error | null) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        }
+      );
+    });
+  }
+
+  private async updateSequenceModified(sequenceId: string, thoughtCount: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      const now = new Date().toISOString();
+      
+      this.db.run(
+        'UPDATE sequences SET lastModified = ?, thoughtCount = ? WHERE id = ?',
+        [now, thoughtCount, sequenceId],
+        function(err: Error | null) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        }
+      );
+    });
+  }
+
+  private validateSequenceThoughtData(input: unknown): SequenceThoughtData {
+    if (!input || typeof input !== 'object') {
+      throw new Error('Invalid input: must be an object');
+    }
+
+    const data = input as Record<string, unknown>;
+
+    // Validate sequence-specific fields
+    if (data.sequenceId !== undefined && (typeof data.sequenceId !== 'string' || data.sequenceId.length === 0)) {
+      throw new Error('Invalid sequenceId: must be a non-empty string');
+    }
+
+    if (data.saveSequence !== undefined) {
+      if (typeof data.saveSequence !== 'object' || data.saveSequence === null) {
+        throw new Error('Invalid saveSequence: must be an object');
+      }
+      const saveData = data.saveSequence as Record<string, unknown>;
+      if (typeof saveData.title !== 'string' || saveData.title.length === 0) {
+        throw new Error('Invalid saveSequence.title: must be a non-empty string');
+      }
+      if (saveData.description !== undefined && typeof saveData.description !== 'string') {
+        throw new Error('Invalid saveSequence.description: must be a string');
+      }
+    }
+
+    if (data.loadSequence !== undefined) {
+      if (typeof data.loadSequence !== 'object' || data.loadSequence === null) {
+        throw new Error('Invalid loadSequence: must be an object');
+      }
+      const loadData = data.loadSequence as Record<string, unknown>;
+      if (typeof loadData.id !== 'string' || loadData.id.length === 0) {
+        throw new Error('Invalid loadSequence.id: must be a non-empty string');
+      }
+    }
+
+    // Validate base thought data
+    const baseData = this.validateThoughtData(data);
+
+    return {
+      ...baseData,
+      sequenceId: data.sequenceId as string | undefined,
+      saveSequence: data.saveSequence as { title: string; description?: string } | undefined,
+      loadSequence: data.loadSequence as { id: string } | undefined
+    };
   }
 
   private validateThoughtData(input: unknown): ThoughtData {
@@ -263,9 +556,81 @@ class SequentialThinkingServer {
 └${border}┘`;
   }
 
-  public processThought(input: unknown): { content: Array<{ type: string; text: string }>; isError?: boolean } {
+  public async processThought(input: unknown): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
     try {
-      const validatedInput = this.validateThoughtData(input);
+      const validatedInput = this.validateSequenceThoughtData(input);
+
+      // Handle sequence loading if requested
+      if (validatedInput.loadSequence) {
+        const sequence = await this.loadSequence(validatedInput.loadSequence.id);
+        if (!sequence) {
+          throw new Error(`Sequence not found: ${validatedInput.loadSequence.id}`);
+        }
+        
+        // Load the sequence thoughts into memory
+        const sequenceThoughts = await this.loadSequenceThoughts(sequence.id);
+        this.thoughtHistory = sequenceThoughts;
+        this.currentSequenceId = sequence.id;
+        
+        // Rebuild branches from loaded thoughts
+        this.branches = {};
+        sequenceThoughts.forEach(thought => {
+          if (thought.branchFromThought && thought.branchId) {
+            if (!this.branches[thought.branchId]) {
+              this.branches[thought.branchId] = [];
+            }
+            this.branches[thought.branchId].push(thought);
+          }
+        });
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              action: 'sequence_loaded',
+              sequence: {
+                id: sequence.id,
+                title: sequence.title,
+                description: sequence.description,
+                thoughtCount: sequence.thoughtCount,
+                status: sequence.status,
+                lastModified: sequence.lastModified
+              },
+              thoughtsLoaded: sequenceThoughts.length,
+              message: `Loaded sequence "${sequence.title}" with ${sequenceThoughts.length} thoughts`
+            }, null, 2)
+          }]
+        };
+      }
+
+      // Handle sequence saving if requested
+      if (validatedInput.saveSequence) {
+        const sequenceId = await this.createSequence(
+          validatedInput.saveSequence.title,
+          validatedInput.saveSequence.description
+        );
+        
+        // Save all current thoughts to the sequence
+        for (const thought of this.thoughtHistory) {
+          await this.saveThought(thought, sequenceId);
+        }
+        
+        await this.updateSequenceModified(sequenceId, this.thoughtHistory.length);
+        this.currentSequenceId = sequenceId;
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              action: 'sequence_saved',
+              sequenceId: sequenceId,
+              title: validatedInput.saveSequence.title,
+              thoughtsSaved: this.thoughtHistory.length,
+              message: `Saved sequence "${validatedInput.saveSequence.title}" with ${this.thoughtHistory.length} thoughts`
+            }, null, 2)
+          }]
+        };
+      }
 
       // Auto-adjust total thoughts if needed
       if (validatedInput.thoughtNumber > validatedInput.totalThoughts) {
@@ -286,6 +651,12 @@ class SequentialThinkingServer {
           this.branches[validatedInput.branchId] = [];
         }
         this.branches[validatedInput.branchId].push(validatedInput);
+      }
+
+      // Save to database if we have a current sequence
+      if (this.currentSequenceId) {
+        await this.saveThought(validatedInput, this.currentSequenceId);
+        await this.updateSequenceModified(this.currentSequenceId, this.thoughtHistory.length);
       }
 
       // Perform memory cleanup
@@ -313,6 +684,8 @@ class SequentialThinkingServer {
         thoughtHistoryLength: this.thoughtHistory.length,
         relatedTo: validatedInput.relatedTo,
         branchId: validatedInput.branchId,
+        currentSequenceId: this.currentSequenceId,
+        persistenceEnabled: this.currentSequenceId !== null,
         memoryStatus: {
           thoughtHistoryLimit: this.maxThoughtHistory,
           branchLimit: this.maxBranches,
@@ -377,6 +750,9 @@ Key features:
 - Verifies the hypothesis based on the Chain of Thought steps
 - Repeats the process until satisfied
 - Provides a correct answer
+- PERSISTENT SEQUENCES: Save and load thinking sequences across sessions
+- Continue complex reasoning over days or weeks
+- Build on previous conclusions and insights
 
 Parameters explained:
 - thought: Your current thinking step, which can include:
@@ -398,6 +774,9 @@ Parameters explained:
 - thoughtType: 'hypothesis' or 'verification' to indicate the type of thought
 - verificationResult: If thoughtType is 'verification', result can be 'confirmed', 'refuted', 'partial', or 'pending'
 - relatedTo: Array of thought numbers this thought relates to or builds upon
+- saveSequence: Object with 'title' and optional 'description' to save current thoughts as a sequence
+- loadSequence: Object with 'id' to load a previously saved sequence
+- sequenceId: ID of the current sequence (for continuing existing sequences)
 
 You should:
 1. Start with an initial estimate of needed thoughts, but be ready to adjust
@@ -410,13 +789,7 @@ You should:
 8. Verify the hypothesis based on the Chain of Thought steps
 9. Repeat the process until satisfied with the solution
 10. Provide a single, ideally correct answer as the final output
-11. Only set nextThoughtNeeded to false when truly done and a satisfactory answer is reached
-
-Environment variables:
-- DISABLE_THOUGHT_LOGGING: Set to "true" to disable colored thought logging to stderr
-- MAX_THOUGHT_HISTORY: Maximum number of thoughts to keep in history (default: 1000)
-- MAX_BRANCHES: Maximum number of branches to maintain (default: 50)
-- MAX_THOUGHTS_PER_BRANCH: Maximum thoughts per branch (default: 100)`,
+11. Only set nextThoughtNeeded to false when truly done and a satisfactory answer is reached`,
   inputSchema: {
     type: "object",
     properties: {
@@ -482,6 +855,38 @@ Environment variables:
         },
         description: "Array of thought numbers this relates to",
         maxItems: 50
+      },
+      sequenceId: {
+        type: "string",
+        description: "ID of the current sequence (for continuing existing sequences)"
+      },
+      saveSequence: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: "Title for the sequence to save",
+            minLength: 1
+          },
+          description: {
+            type: "string",
+            description: "Optional description for the sequence"
+          }
+        },
+        required: ["title"],
+        description: "Save current thoughts as a sequence"
+      },
+      loadSequence: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            description: "ID of the sequence to load",
+            minLength: 1
+          }
+        },
+        required: ["id"],
+        description: "Load a previously saved sequence"
       }
     },
     required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"]
@@ -508,7 +913,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (request.params.name === "sequentialthinking") {
-    return thinkingServer.processThought(request.params.arguments);
+    return await thinkingServer.processThought(request.params.arguments);
   }
 
   return {

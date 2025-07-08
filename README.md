@@ -5,7 +5,7 @@
 Based on concepts from [modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers).
 </div>
 
-An MCP server implementation that provides a tool for dynamic and reflective problem-solving through a structured thinking process with enhanced memory management, type safety, and verification workflows.
+An MCP server implementation that provides a tool for dynamic and reflective problem-solving through a structured thinking process with enhanced memory management, type safety, verification workflows, and **persistent sequences** for long-term reasoning across sessions.
 
 ## Features
 
@@ -14,6 +14,9 @@ An MCP server implementation that provides a tool for dynamic and reflective pro
 - **Alternative Reasoning**: Branch into alternative paths of reasoning
 - **Adaptive Planning**: Adjust the total number of thoughts dynamically
 - **Hypothesis Testing**: Generate and verify solution hypotheses with result tracking
+- **🔥 PERSISTENT SEQUENCES**: Save and load thinking sequences across sessions
+- **🔥 LONG-TERM REASONING**: Continue complex analysis over days or weeks
+- **🔥 AUTOMATIC PERSISTENCE**: Thoughts saved automatically when sequence is active
 - **Memory Management**: Configurable limits prevent memory leaks
 - **Type Safety**: Comprehensive input validation and sanitization
 - **Enhanced Logging**: Colored terminal output with thought classification
@@ -41,6 +44,9 @@ Facilitates a detailed, step-by-step thinking process for problem-solving and an
 - `thoughtType` (enum): "hypothesis" or "verification" to classify the thought
 - `verificationResult` (enum): "confirmed", "refuted", "partial", or "pending" (only with thoughtType="verification")
 - `relatedTo` (array): Array of thought numbers this relates to (max 50 items)
+- **🔥 NEW: `saveSequence`** (object): Save current thoughts as a sequence `{ title: "My Analysis", description: "Optional" }`
+- **🔥 NEW: `loadSequence`** (object): Load a previously saved sequence `{ id: "sequence-id" }`
+- **🔥 NEW: `sequenceId`** (string): ID of the current sequence for automatic persistence
 
 **Enhanced Response:**
 The tool now returns comprehensive information including:
@@ -51,6 +57,8 @@ The tool now returns comprehensive information including:
 - Verification workflow tracking
 - Unverified hypotheses detection
 - Related thought mapping
+- **🔥 NEW: Current sequence information and persistence status**
+- **🔥 NEW: Sequence management actions (save/load confirmations)**
 
 ## Usage
 
@@ -63,6 +71,59 @@ The Sequential Thinking tool is designed for:
 - Tasks that need to maintain context over multiple steps
 - Hypothesis generation and verification workflows
 - Situations where irrelevant information needs to be filtered out
+- **🔥 NEW: Long-term reasoning projects (business strategy, research planning)**
+- **🔥 NEW: Complex decision-making that evolves over time**
+- **🔥 NEW: Building on previous insights and conclusions**
+
+## 🔥 PERSISTENT SEQUENCES USAGE
+
+### Basic Workflow
+
+1. **Normal thinking**: Use the tool as usual for sequential thinking
+2. **Save sequence**: Add `saveSequence: { title: "My Analysis" }` to save your progress
+3. **Resume later**: Use `loadSequence: { id: "returned-sequence-id" }` to continue
+4. **Automatic persistence**: All subsequent thoughts are automatically saved
+
+### Example: Saving a Sequence
+
+```javascript
+{
+  "thought": "I've completed my initial analysis. Let me save this sequence.",
+  "thoughtNumber": 5,
+  "totalThoughts": 5,
+  "nextThoughtNeeded": false,
+  "saveSequence": {
+    "title": "Product Strategy Analysis Q2 2025",
+    "description": "Comprehensive analysis of our product strategy options"
+  }
+}
+```
+
+### Example: Loading a Sequence
+
+```javascript
+{
+  "thought": "I want to continue my previous analysis.",
+  "thoughtNumber": 1,
+  "totalThoughts": 1,
+  "nextThoughtNeeded": false,
+  "loadSequence": {
+    "id": "seq-abc123def456"
+  }
+}
+```
+
+### Example: Continuing a Loaded Sequence
+
+```javascript
+{
+  "thought": "Building on my previous analysis, I now see that we need to consider...",
+  "thoughtNumber": 6,
+  "totalThoughts": 8,
+  "nextThoughtNeeded": true
+}
+// This thought will be automatically saved to the active sequence
+```
 
 ## Configuration
 
@@ -72,6 +133,15 @@ The Sequential Thinking tool is designed for:
 - `MAX_THOUGHT_HISTORY`: Maximum number of thoughts to keep in history (default: 1000)
 - `MAX_BRANCHES`: Maximum number of branches to maintain (default: 50)
 - `MAX_THOUGHTS_PER_BRANCH`: Maximum thoughts per branch (default: 100)
+
+### Database Storage
+
+The server automatically creates and manages a SQLite database at `dist/sequences.db` to store:
+
+- **Sequences**: Metadata including title, description, creation date, and status
+- **Thoughts**: Complete thought data with timestamps and sequence relationships
+- **Automatic cleanup**: Old sequences and thoughts are managed according to configured limits
+- **Cross-session persistence**: All data survives server restarts
 
 ### Usage with Claude Desktop
 
@@ -165,6 +235,14 @@ For Docker installation:
 ```
 
 ## Enhanced Features
+
+### 🔥 PERSISTENT SEQUENCES (NEW)
+
+- **SQLite Database**: All sequences and thoughts stored permanently
+- **Cross-session continuity**: Resume complex reasoning after days or weeks
+- **Automatic persistence**: Thoughts saved automatically when sequence is active
+- **Seamless integration**: Works with all existing features (revisions, branches, verification)
+- **Backward compatibility**: All existing functionality preserved
 
 ### Memory Management
 

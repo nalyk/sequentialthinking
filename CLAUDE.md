@@ -4,17 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Model Context Protocol (MCP) server that implements a sequential thinking tool for dynamic and reflective problem-solving. The server provides a structured thinking process that allows for revision, branching, adaptive reasoning, hypothesis testing, and verification workflows. **Updated to MCP Specification 2025-06-18 with latest TypeScript SDK v1.15.0 and comprehensive reliability improvements.**
+This is a Model Context Protocol (MCP) server that implements a sequential thinking tool for dynamic and reflective problem-solving. The server provides a structured thinking process that allows for revision, branching, adaptive reasoning, hypothesis testing, and verification workflows. **Updated to MCP Specification 2025-06-18 with latest TypeScript SDK v1.15.0, comprehensive reliability improvements, and PERSISTENT SEQUENCES functionality.**
 
 ## Architecture
 
 The project consists of a single main file (`index.ts`) that implements:
 
-- **SequentialThinkingServer class**: Core server logic that manages thought history, branches, validation, and memory management
+- **SequentialThinkingServer class**: Core server logic that manages thought history, branches, validation, memory management, and persistence
 - **ThoughtData interface**: Defines the structure for thought data with support for revisions, branching, and verification workflows
 - **MCP Server Integration**: Uses the @modelcontextprotocol/sdk to create a compliant MCP server
 - **Enhanced Type Safety**: Comprehensive input validation and sanitization
 - **Memory Management**: Configurable limits and automatic cleanup
+- **SQLite Database**: Persistent storage for sequences and thoughts across sessions
+- **Sequence Management**: Save, load, and manage thinking sequences over time
 
 The server provides one tool called `sequentialthinking` that facilitates step-by-step problem-solving with the ability to:
 - Revise previous thoughts with validation
@@ -27,6 +29,9 @@ The server provides one tool called `sequentialthinking` that facilitates step-b
 - **Enhanced visual formatting with colored output for different thought types**
 - **Automatic memory management and cleanup**
 - **Comprehensive input validation and sanitization**
+- **🔥 PERSISTENT SEQUENCES: Save and load thinking sequences across sessions**
+- **🔥 SEQUENCE MANAGEMENT: Continue complex reasoning over days or weeks**
+- **🔥 AUTOMATIC PERSISTENCE: Thoughts are saved to database when sequence is active**
 
 ## Build Commands
 
@@ -47,7 +52,8 @@ The project uses:
 - **TypeScript**: Configured for ES2022 target with NodeNext module resolution
 - **Output**: Compiled JavaScript goes to `dist/` directory
 - **Entry point**: `dist/index.js` (executable binary)
-- **Dependencies**: Uses MCP SDK v1.15.0, chalk for colored output
+- **Dependencies**: Uses MCP SDK v1.15.0, chalk for colored output, sqlite3 for persistence
+- **Database**: SQLite database stored as `dist/sequences.db`
 - **Note**: yargs dependency is included but not currently used (reserved for future CLI features)
 
 ## Key Implementation Details
@@ -59,6 +65,10 @@ The project uses:
   - `thoughtType`: 'hypothesis' or 'verification' to classify the thought
   - `verificationResult`: 'confirmed', 'refuted', 'partial', or 'pending' for verification thoughts
   - `relatedTo`: Array of thought numbers this thought relates to or builds upon (max 50 items)
+- **🔥 NEW: Sequence Management Fields**:
+  - `saveSequence`: Object with 'title' and optional 'description' to save current thoughts as a sequence
+  - `loadSequence`: Object with 'id' to load a previously saved sequence
+  - `sequenceId`: ID of the current sequence (for continuing existing sequences)
 
 ### Input Validation & Type Safety
 - **Comprehensive validation**: All inputs are validated with descriptive error messages
@@ -103,6 +113,20 @@ The project uses:
 - **Related thought mapping**: Links verifications to their corresponding hypotheses
 - **Workflow reporting**: Includes verification status in tool responses
 
+### 🔥 PERSISTENT SEQUENCES (NEW)
+- **SQLite Database**: Stores sequences and thoughts permanently in `dist/sequences.db`
+- **Sequence Management**: Create, load, and manage thinking sequences across sessions
+- **Automatic Persistence**: When a sequence is active, all thoughts are automatically saved
+- **Sequence Operations**:
+  - `saveSequence: { title: "My Analysis", description: "Optional description" }` - Save current thoughts as a new sequence
+  - `loadSequence: { id: "sequence-id" }` - Load a previously saved sequence into memory
+  - Automatic saving when sequence is active
+- **Database Schema**:
+  - `sequences` table: id, title, description, created, lastModified, status, thoughtCount
+  - `thoughts` table: All thought data plus sequenceId, created, modified timestamps
+- **Seamless Integration**: Works with all existing features (revisions, branches, verification)
+- **Backward Compatibility**: All existing functionality works exactly the same
+
 ### Error Handling
 - **Consistent error responses**: All errors include descriptive messages and timestamps
 - **Graceful degradation**: Validation failures don't crash the server
@@ -139,6 +163,8 @@ This server has been **comprehensively fixed and enhanced** with the following i
 - **TypeScript**: 5.8.3 (latest stable) 
 - **@types/yargs**: 17.0.33 (latest)
 - **chalk**: 5.3.0 (for colored output)
+- **🔥 NEW: sqlite3**: 5.1.6 (for persistent sequences)
+- **🔥 NEW: @types/sqlite3**: 3.1.11 (TypeScript definitions)
 
 ### MCP Specification Compliance
 - **Complies with MCP Specification 2025-06-18** (latest version)
@@ -156,6 +182,9 @@ This server has been **comprehensively fixed and enhanced** with the following i
 - Memory management with configurable limits
 - Input sanitization and validation
 - Branch management with automatic cleanup
+- **🔥 PERSISTENT SEQUENCES**: Save and load thinking sequences across sessions
+- **🔥 SQLITE DATABASE**: Permanent storage for sequences and thoughts
+- **🔥 SEQUENCE MANAGEMENT**: Continue complex reasoning over time
 
 ## Environment Variables
 
@@ -180,6 +209,8 @@ The `sequentialthinking` tool now returns enhanced responses including:
   "thoughtHistoryLength": 15,
   "relatedTo": [3, 7],
   "branchId": null,
+  "currentSequenceId": "seq-123456",
+  "persistenceEnabled": true,
   "memoryStatus": {
     "thoughtHistoryLimit": 1000,
     "branchLimit": 50,
@@ -203,6 +234,55 @@ The `sequentialthinking` tool now returns enhanced responses including:
 }
 ```
 
+## 🔥 PERSISTENT SEQUENCES USAGE EXAMPLES
+
+### Saving a Sequence
+```javascript
+// After thinking through several thoughts, save them as a sequence
+{
+  "thought": "This completes my analysis. Let me save this sequence.",
+  "thoughtNumber": 5,
+  "totalThoughts": 5,
+  "nextThoughtNeeded": false,
+  "saveSequence": {
+    "title": "Product Strategy Analysis",
+    "description": "Comprehensive analysis of our product strategy for Q2 2025"
+  }
+}
+```
+
+### Loading a Sequence
+```javascript
+// Load a previously saved sequence to continue work
+{
+  "thought": "I want to continue my previous analysis.",
+  "thoughtNumber": 1,
+  "totalThoughts": 1,
+  "nextThoughtNeeded": false,
+  "loadSequence": {
+    "id": "seq-123456"
+  }
+}
+```
+
+### Continuing a Loaded Sequence
+```javascript
+// After loading, continue adding thoughts (automatically saved)
+{
+  "thought": "Building on my previous analysis, I now realize...",
+  "thoughtNumber": 6,
+  "totalThoughts": 8,
+  "nextThoughtNeeded": true
+}
+```
+
+### Typical Workflow
+1. **Start thinking** - Use normal sequential thinking
+2. **Save sequence** - When ready to pause: `saveSequence: { title: "My Analysis" }`
+3. **Resume later** - Load sequence: `loadSequence: { id: "sequence-id" }`
+4. **Continue thinking** - All new thoughts automatically saved to sequence
+5. **Build complex insights** - Work on the same problem over days/weeks
+
 ## Important Implementation Notes
 
 - **Stdio only**: This server is designed for stdio transport communication
@@ -211,6 +291,9 @@ The `sequentialthinking` tool now returns enhanced responses including:
 - **Error resilient**: Graceful error handling with descriptive messages
 - **MCP compliant**: Follows latest MCP specification requirements
 - **Production ready**: Enhanced reliability and safety features
+- **🔥 PERSISTENT**: SQLite database enables long-term reasoning across sessions
+- **🔥 BACKWARD COMPATIBLE**: All existing functionality preserved
+- **🔥 AUTOMATIC PERSISTENCE**: Thoughts saved automatically when sequence active
 
 ## Important Instruction Reminders
 
