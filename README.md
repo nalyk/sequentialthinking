@@ -5,8 +5,6 @@
 Based on concepts from [modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers).
 </div>
 
-# Sequential Thinking MCP Server (based on original )
-
 An MCP server implementation that provides a tool for dynamic and reflective problem-solving through a structured thinking process with enhanced memory management, type safety, and verification workflows.
 
 ## Features
