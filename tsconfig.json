@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    /* inherited from base */
+    "target": "ES2022",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+
+    /* overridden / added by child */
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "./dist",
+    "rootDir": "."
+  },
+  /* “include” replaces the parent’s value outright */
+  "include": ["./**/*.ts"],
+  /* “exclude” is inherited because the child omitted it */
+  "exclude": ["node_modules"]
+}
