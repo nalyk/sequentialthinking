@@ -3,6 +3,8 @@
   <h1>Sequential Thinking MCP Server</h1>
   
 Based on concepts from [modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers).
+
+**Repository:** [https://github.com/nalyk/sequentialthinking](https://github.com/nalyk/sequentialthinking)
 </div>
 
 An MCP server implementation that provides a tool for dynamic and reflective problem-solving through a structured thinking process with enhanced memory management, type safety, verification workflows, and **persistent sequences** for long-term reasoning across sessions.
@@ -147,14 +149,14 @@ The server automatically creates and manages a SQLite database at `dist/sequence
 
 Add this to your `claude_desktop_config.json`:
 
-#### npx
+#### Local Build
 
 ```json
 {
   "mcpServers": {
     "sequential-thinking": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "command": "node",
+      "args": ["/path/to/sequentialthinking/dist/index.js"],
       "env": {
         "DISABLE_THOUGHT_LOGGING": "false",
         "MAX_THOUGHT_HISTORY": "1000",
@@ -185,27 +187,21 @@ Add this to your `claude_desktop_config.json`:
 
 ### Usage with VS Code
 
-For quick installation, click one of the installation buttons below...
-
-[![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-NPM-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=sequentialthinking&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-sequential-thinking%22%5D%7D) [![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-NPM-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=sequentialthinking&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40modelcontextprotocol%2Fserver-sequential-thinking%22%5D%7D&quality=insiders)
-
-[![Install with Docker in VS Code](https://img.shields.io/badge/VS_Code-Docker-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=sequentialthinking&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22--rm%22%2C%22-i%22%2C%22mcp%2Fsequentialthinking%22%5D%7D) [![Install with Docker in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Docker-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=sequentialthinking&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22--rm%22%2C%22-i%22%2C%22mcp%2Fsequentialthinking%22%5D%7D&quality=insiders)
-
-For manual installation, add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open Settings (JSON)`.
+Add the following JSON block to your User Settings (JSON) file in VS Code. You can do this by pressing `Ctrl + Shift + P` and typing `Preferences: Open Settings (JSON)`.
 
 Optionally, you can add it to a file called `.vscode/mcp.json` in your workspace. This will allow you to share the configuration with others.
 
 > Note that the `mcp` key is not needed in the `.vscode/mcp.json` file.
 
-For NPX installation:
+For local build installation:
 
 ```json
 {
   "mcp": {
     "servers": {
       "sequential-thinking": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+        "command": "node",
+        "args": ["/path/to/sequentialthinking/dist/index.js"],
         "env": {
           "DISABLE_THOUGHT_LOGGING": "false",
           "MAX_THOUGHT_HISTORY": "1000"
@@ -274,11 +270,15 @@ For Docker installation:
 - Related thought information display
 - Verification result context
 
-## Building
+## Installation and Building
 
-Local development:
+To use this MCP server, you need to build it locally:
 
 ```bash
+# Clone the repository
+git clone https://github.com/nalyk/sequentialthinking.git
+cd sequentialthinking
+
 # Install dependencies
 npm install
 
@@ -288,6 +288,8 @@ npm run build
 # Watch for changes during development
 npm run watch
 ```
+
+After building, the executable will be available at `dist/index.js`.
 
 Docker:
 
