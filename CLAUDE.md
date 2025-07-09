@@ -68,6 +68,7 @@ The project uses:
 - **🔥 NEW: Sequence Management Fields**:
   - `saveSequence`: Object with 'title' and optional 'description' to save current thoughts as a sequence
   - `loadSequence`: Object with 'id' to load a previously saved sequence
+  - `searchSequence`: Object with optional 'query' and 'limit' to search sequences with fuzzy matching
   - `sequenceId`: ID of the current sequence (for continuing existing sequences)
 
 ### Input Validation & Type Safety
@@ -279,9 +280,28 @@ The `sequentialthinking` tool now returns enhanced responses including:
 ### Typical Workflow
 1. **Start thinking** - Use normal sequential thinking
 2. **Save sequence** - When ready to pause: `saveSequence: { title: "My Analysis" }`
-3. **Resume later** - Load sequence: `loadSequence: { id: "sequence-id" }`
-4. **Continue thinking** - All new thoughts automatically saved to sequence
-5. **Build complex insights** - Work on the same problem over days/weeks
+3. **Find sequence** - Search your work: `searchSequence: { query: "analysis" }`
+4. **Resume later** - Load sequence: `loadSequence: { id: "found-sequence-id" }`
+5. **Continue thinking** - All new thoughts automatically saved to sequence
+6. **Build complex insights** - Work on the same problem over days/weeks
+
+### 🔍 Sequence Search Examples
+```javascript
+// Search with fuzzy matching (Romanian/Russian diacritics supported)
+{
+  "searchSequence": {
+    "query": "strategia",     // finds "Strategia de dezvoltare"
+    "limit": 10
+  }
+}
+
+// List all sequences (no query)
+{
+  "searchSequence": {
+    "limit": 20
+  }
+}
+```
 
 ## Important Implementation Notes
 

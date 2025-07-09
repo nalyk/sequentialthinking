@@ -48,6 +48,7 @@ Facilitates a detailed, step-by-step thinking process for problem-solving and an
 - `relatedTo` (array): Array of thought numbers this relates to (max 50 items)
 - **🔥 NEW: `saveSequence`** (object): Save current thoughts as a sequence `{ title: "My Analysis", description: "Optional" }`
 - **🔥 NEW: `loadSequence`** (object): Load a previously saved sequence `{ id: "sequence-id" }`
+- **🔥 NEW: `searchSequence`** (object): Search for sequences with fuzzy matching `{ query: "strategy", limit: 10 }`
 - **🔥 NEW: `sequenceId`** (string): ID of the current sequence for automatic persistence
 
 **Enhanced Response:**
@@ -79,12 +80,61 @@ The Sequential Thinking tool is designed for:
 
 ## 🔥 PERSISTENT SEQUENCES USAGE
 
+### 🔍 **FINDING YOUR SEQUENCES** (Most Important!)
+
+**Never remember sequence IDs again!** Use powerful fuzzy search with Romanian/Russian support:
+
+```javascript
+// Search for sequences (fuzzy matching)
+{
+  "thought": "I need to find my analysis",
+  "thoughtNumber": 1,
+  "totalThoughts": 1,
+  "nextThoughtNeeded": false,
+  "searchSequence": {
+    "query": "strategy",
+    "limit": 10
+  }
+}
+
+// List all sequences (no query = show all)
+{
+  "thought": "Show me all my sequences",
+  "thoughtNumber": 1,
+  "totalThoughts": 1,
+  "nextThoughtNeeded": false,
+  "searchSequence": {
+    "limit": 20
+  }
+}
+```
+
+**🌍 Multilingual Support Examples:**
+```javascript
+// Romanian diacritics work perfectly
+{
+  "searchSequence": {
+    "query": "strategie",  // finds "Strategia de dezvoltare"
+    "limit": 10
+  }
+}
+
+// Russian/Cyrillic also supported
+{
+  "searchSequence": {
+    "query": "стратегия",  // finds "Стратегический анализ"
+    "limit": 10
+  }
+}
+```
+
 ### Basic Workflow
 
 1. **Normal thinking**: Use the tool as usual for sequential thinking
 2. **Save sequence**: Add `saveSequence: { title: "My Analysis" }` to save your progress
-3. **Resume later**: Use `loadSequence: { id: "returned-sequence-id" }` to continue
-4. **Automatic persistence**: All subsequent thoughts are automatically saved
+3. **🔍 Find sequence**: Use `searchSequence` to find your work (fuzzy search!)
+4. **Resume**: Use `loadSequence: { id: "found-sequence-id" }` to continue
+5. **Automatic persistence**: All subsequent thoughts are automatically saved
 
 ### Example: Saving a Sequence
 
@@ -101,16 +151,35 @@ The Sequential Thinking tool is designed for:
 }
 ```
 
+### Example: Searching for Sequences
+
+```javascript
+// Search by partial title/description
+{
+  "thought": "I need to find my product analysis work",
+  "thoughtNumber": 1,
+  "totalThoughts": 1,
+  "nextThoughtNeeded": false,
+  "searchSequence": {
+    "query": "product",
+    "limit": 10
+  }
+}
+
+// Response shows matching sequences with titles, descriptions, and IDs
+```
+
 ### Example: Loading a Sequence
 
 ```javascript
+// After finding the sequence ID through search
 {
   "thought": "I want to continue my previous analysis.",
   "thoughtNumber": 1,
   "totalThoughts": 1,
   "nextThoughtNeeded": false,
   "loadSequence": {
-    "id": "seq-abc123def456"
+    "id": "seq-abc123def456"  // From search results
   }
 }
 ```
