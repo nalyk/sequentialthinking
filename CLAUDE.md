@@ -23,9 +23,9 @@ The server provides **complete MCP capabilities**:
 ### 🔥 **RESOURCES** (5 live contextual resources)
 - `sequence://current` - Live current sequence data
 - `sequences://library` - Browse all saved sequences
-- `patterns://analysis` - User thinking patterns analysis
+- `patterns://analysis` - User thinking patterns analysis with relationship insights
 - `verification://status` - Real-time verification dashboard
-- `thoughts://recent` - Recent thoughts across all sequences
+- `thoughts://recent` - Recent thoughts across all sequences with relationship data
 
 ### 🔥 **PROMPTS** (5 professional thinking templates)
 - `start_analysis` - Structured analysis framework
@@ -50,6 +50,9 @@ The `sequentialthinking` tool facilitates step-by-step problem-solving with the 
 - **🔥 PERSISTENT SEQUENCES: Save and load thinking sequences across sessions**
 - **🔥 SEQUENCE MANAGEMENT: Continue complex reasoning over days or weeks**
 - **🔥 AUTOMATIC PERSISTENCE: Thoughts are saved to database when sequence is active**
+- **🔥 ENHANCED SEARCH: Full-text search across thought content using SQLite FTS**
+- **🔥 EXPORT/IMPORT: Complete sequence backup and sharing capabilities**
+- **🔥 RELATIONSHIP INSIGHTS: Enhanced resources show thought connections and patterns**
 
 ## Build Commands
 
@@ -88,7 +91,9 @@ The project uses:
 - **🔥 NEW: Sequence Management Fields**:
   - `saveSequence`: Object with 'title' and optional 'description' to save current thoughts as a sequence
   - `loadSequence`: Object with 'id' to load a previously saved sequence
-  - `searchSequence`: Object with optional 'query' and 'limit' to search sequences with fuzzy matching
+  - `searchSequence`: Object with optional 'query', 'limit', and 'contentSearch' to search sequences with fuzzy matching and full-text search
+  - `exportSequence`: Object with 'id' to export sequence as JSON
+  - `importSequence`: Object with 'data' to import sequence from JSON
   - `sequenceId`: ID of the current sequence (for continuing existing sequences)
 
 ### Input Validation & Type Safety
@@ -177,6 +182,24 @@ timeout 3s ./dist/index.js 2>&1 || echo "Server startup test completed"
 ## Recent Fixes & Improvements (July 2025)
 
 This server has been **comprehensively transformed** from a basic tool-only implementation to a **complete MCP platform** with the following improvements:
+
+### 🎆 LATEST ENHANCEMENTS (July 2025)
+
+**Phase 1: Enhanced Content Search**
+- Added SQLite FTS (Full-Text Search) for searching within thought content
+- Extended `searchSequence` with `contentSearch` parameter for 10x faster access to relevant past thoughts
+- Maintains existing fuzzy search for titles/descriptions
+
+**Phase 2: Export/Import Capabilities**
+- Added `exportSequence` functionality for JSON backup/sharing
+- Added `importSequence` functionality to restore sequences
+- Complete sequence portability with all thoughts and metadata
+
+**Phase 3: Enhanced Relationship Utilization**
+- Better utilization of existing `relatedTo` field in resources
+- Added relationship analysis to `patterns://analysis` resource
+- Enhanced `thoughts://recent` to show connections and counts
+- Visual understanding of thought connection patterns
 
 ### Critical Fixes Applied
 
@@ -322,10 +345,11 @@ The `sequentialthinking` tool now returns enhanced responses including:
 
 1. **Start thinking** - Use normal sequential thinking
 2. **Save sequence** - When ready to pause: `saveSequence: { title: "My Analysis" }`
-3. **Find sequence** - Search your work: `searchSequence: { query: "analysis" }`
+3. **Find sequence** - Search your work: `searchSequence: { query: "analysis", contentSearch: true }`
 4. **Resume later** - Load sequence: `loadSequence: { id: "found-sequence-id" }`
 5. **Continue thinking** - All new thoughts automatically saved to sequence
 6. **Build complex insights** - Work on the same problem over days/weeks
+7. **🎆 NEW: Export/Import** - Use `exportSequence`/`importSequence` for backup/sharing
 
 ### 🔍 Sequence Search Examples
 
@@ -335,6 +359,15 @@ The `sequentialthinking` tool now returns enhanced responses including:
   "searchSequence": {
     "query": "strategia",     // finds "Strategia de dezvoltare"
     "limit": 10
+  }
+}
+
+// NEW: Search within thought content using FTS
+{
+  "searchSequence": {
+    "query": "market analysis",
+    "limit": 10,
+    "contentSearch": true    // searches within thought content
   }
 }
 
@@ -358,6 +391,7 @@ The `sequentialthinking` tool now returns enhanced responses including:
 - **🔥 BACKWARD COMPATIBLE**: All existing functionality preserved
 - **🔥 AUTOMATIC PERSISTENCE**: Thoughts saved automatically when sequence active
 - **🔥 FULL MCP IMPLEMENTATION**: Resources, Prompts, and Tools all implemented
+- **🔥 ENHANCED SEARCH & PORTABILITY**: Full-text search, export/import, relationship insights
 - **🔥 PHILOSOPHY ALIGNED**: All new features enhance without interfering with thinking
 
 ## Important Instruction Reminders

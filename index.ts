@@ -67,6 +67,16 @@ interface SequenceThoughtData extends ThoughtData {
   searchSequence?: {
     query?: string;
     limit?: number;
+    contentSearch?: boolean;
+  };
+  exportSequence?: {
+    id: string;
+  };
+  importSequence?: {
+    data: {
+      sequence: SequenceRecord;
+      thoughts: ThoughtRecord[];
+    };
   };
 }
 
@@ -189,6 +199,34 @@ class SequentialThinkingServer {
         this.db!.run(`
           CREATE INDEX IF NOT EXISTS idx_thoughts_number ON thoughts(sequenceId, thoughtNumber);
         `);
+
+        // Create FTS virtual table for full-text search on thought content
+        this.db!.run(`
+          CREATE VIRTUAL TABLE IF NOT EXISTS thoughts_fts USING fts5(
+            thought,
+            content='thoughts',
+            content_rowid='rowid'
+          );
+        `);
+
+        // Create triggers to keep FTS table in sync with thoughts table
+        this.db!.run(`
+          CREATE TRIGGER IF NOT EXISTS thoughts_fts_insert AFTER INSERT ON thoughts BEGIN
+            INSERT INTO thoughts_fts(rowid, thought) VALUES (new.rowid, new.thought);
+          END;
+        `);
+
+        this.db!.run(`
+          CREATE TRIGGER IF NOT EXISTS thoughts_fts_update AFTER UPDATE ON thoughts BEGIN
+            UPDATE thoughts_fts SET thought = new.thought WHERE rowid = new.rowid;
+          END;
+        `);
+
+        this.db!.run(`
+          CREATE TRIGGER IF NOT EXISTS thoughts_fts_delete AFTER DELETE ON thoughts BEGIN
+            DELETE FROM thoughts_fts WHERE rowid = old.rowid;
+          END;
+        `);
       });
     } catch (error) {
       console.error('Failed to initialize database:', error);
@@ -288,6 +326,87 @@ class SequentialThinkingServer {
             }));
             resolve(thoughts);
           }
+        }
+      );
+    });
+  }
+
+  private async exportSequence(sequenceId: string): Promise<{ sequence: SequenceRecord; thoughts: ThoughtRecord[] }> {
+    const sequence = await this.loadSequence(sequenceId);
+    if (!sequence) {
+      throw new Error(`Sequence with id ${sequenceId} not found`);
+    }
+    const thoughts = await this.loadSequenceThoughts(sequenceId);
+    return { sequence, thoughts };
+  }
+
+  private async importSequence(data: { sequence: SequenceRecord; thoughts: ThoughtRecord[] }): Promise<string> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        reject(new Error('Database not initialized'));
+        return;
+      }
+
+      const newSequenceId = this.generateId();
+      const now = new Date().toISOString();
+      
+      // Insert sequence
+      const self = this;
+      this.db.run(
+        'INSERT INTO sequences (id, title, description, created, lastModified, status, thoughtCount) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [newSequenceId, data.sequence.title, data.sequence.description, now, now, 'active', data.thoughts.length],
+        function(sequenceErr: Error | null) {
+          if (sequenceErr) {
+            reject(sequenceErr);
+            return;
+          }
+
+          // Insert thoughts
+          const insertThought = (thought: ThoughtRecord, callback: (err?: Error) => void) => {
+            const thoughtId = self.generateId();
+            self.db!.run(
+              'INSERT INTO thoughts (id, sequenceId, thought, thoughtNumber, totalThoughts, isRevision, revisesThought, branchFromThought, branchId, needsMoreThoughts, nextThoughtNeeded, thoughtType, verificationResult, relatedTo, created, modified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [
+                thoughtId,
+                newSequenceId,
+                thought.thought,
+                thought.thoughtNumber,
+                thought.totalThoughts,
+                thought.isRevision ? 1 : 0,
+                thought.revisesThought,
+                thought.branchFromThought,
+                thought.branchId,
+                thought.needsMoreThoughts ? 1 : 0,
+                thought.nextThoughtNeeded ? 1 : 0,
+                thought.thoughtType,
+                thought.verificationResult,
+                thought.relatedTo ? JSON.stringify(thought.relatedTo) : null,
+                now,
+                now
+              ],
+              callback
+            );
+          };
+
+          // Insert all thoughts sequentially
+          let thoughtIndex = 0;
+          const insertNextThought = () => {
+            if (thoughtIndex >= data.thoughts.length) {
+              resolve(newSequenceId);
+              return;
+            }
+            
+            insertThought(data.thoughts[thoughtIndex], (err?: Error) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              thoughtIndex++;
+              insertNextThought();
+            });
+          };
+          
+          insertNextThought();
         }
       );
     });
@@ -397,7 +516,7 @@ class SequentialThinkingServer {
     return dp[m][n];
   }
 
-  private async searchSequences(query?: string, limit: number = 10): Promise<{ sequences: SequenceRecord[], totalCount: number }> {
+  private async searchSequences(query?: string, limit: number = 10, contentSearch?: boolean): Promise<{ sequences: SequenceRecord[], totalCount: number }> {
     return new Promise((resolve, reject) => {
       if (!this.db) {
         reject(new Error('Database not initialized'));
@@ -429,51 +548,81 @@ class SequentialThinkingServer {
         return;
       }
 
-      // Search with fuzzy matching
-      this.db.all(
-        'SELECT * FROM sequences',
-        [],
-        (err: Error | null, rows: any[]) => {
-          if (err) {
-            reject(err);
-          } else {
-            const sequences: SequenceRecord[] = rows.map(row => ({
-              id: row.id,
-              title: row.title,
-              description: row.description,
-              created: new Date(row.created),
-              lastModified: new Date(row.lastModified),
-              status: row.status,
-              thoughtCount: row.thoughtCount
-            }));
-
-            // Calculate fuzzy scores and filter
-            const scoredSequences = sequences.map(seq => {
-              const titleScore = this.calculateFuzzyScore(query, seq.title);
-              const descriptionScore = seq.description ? this.calculateFuzzyScore(query, seq.description) : 0;
-              const maxScore = Math.max(titleScore, descriptionScore);
-              
-              return {
-                sequence: seq,
-                score: maxScore,
-                titleScore,
-                descriptionScore
-              };
-            }).filter(item => item.score > 20) // Only show sequences with reasonable match
-              .sort((a, b) => {
-                // Sort by score first, then by lastModified
-                if (a.score !== b.score) {
-                  return b.score - a.score;
-                }
-                return b.sequence.lastModified.getTime() - a.sequence.lastModified.getTime();
-              })
-              .slice(0, limit);
-
-            const results = scoredSequences.map(item => item.sequence);
-            resolve({ sequences: results, totalCount: results.length });
+      // Search with fuzzy matching and optional content search
+      if (contentSearch) {
+        // Use FTS to search thought content
+        this.db.all(
+          `SELECT DISTINCT s.* FROM sequences s 
+           JOIN thoughts t ON s.id = t.sequenceId 
+           JOIN thoughts_fts fts ON t.rowid = fts.rowid 
+           WHERE thoughts_fts MATCH ? 
+           ORDER BY s.lastModified DESC 
+           LIMIT ?`,
+          [query, limit],
+          (err: Error | null, rows: any[]) => {
+            if (err) {
+              reject(err);
+            } else {
+              const sequences: SequenceRecord[] = rows.map(row => ({
+                id: row.id,
+                title: row.title,
+                description: row.description,
+                created: new Date(row.created),
+                lastModified: new Date(row.lastModified),
+                status: row.status,
+                thoughtCount: row.thoughtCount
+              }));
+              resolve({ sequences, totalCount: sequences.length });
+            }
           }
-        }
-      );
+        );
+      } else {
+        // Original fuzzy search on titles and descriptions
+        this.db.all(
+          'SELECT * FROM sequences',
+          [],
+          (err: Error | null, rows: any[]) => {
+            if (err) {
+              reject(err);
+            } else {
+              const sequences: SequenceRecord[] = rows.map(row => ({
+                id: row.id,
+                title: row.title,
+                description: row.description,
+                created: new Date(row.created),
+                lastModified: new Date(row.lastModified),
+                status: row.status,
+                thoughtCount: row.thoughtCount
+              }));
+
+              // Calculate fuzzy scores and filter
+              const scoredSequences = sequences.map(seq => {
+                const titleScore = this.calculateFuzzyScore(query, seq.title);
+                const descriptionScore = seq.description ? this.calculateFuzzyScore(query, seq.description) : 0;
+                const maxScore = Math.max(titleScore, descriptionScore);
+                
+                return {
+                  sequence: seq,
+                  score: maxScore,
+                  titleScore,
+                  descriptionScore
+                };
+              }).filter(item => item.score > 20) // Only show sequences with reasonable match
+                .sort((a, b) => {
+                  // Sort by score first, then by lastModified
+                  if (a.score !== b.score) {
+                    return b.score - a.score;
+                  }
+                  return b.sequence.lastModified.getTime() - a.sequence.lastModified.getTime();
+                })
+                .slice(0, limit);
+
+              const results = scoredSequences.map(item => item.sequence);
+              resolve({ sequences: results, totalCount: results.length });
+            }
+          }
+        );
+      }
     });
   }
 
@@ -523,6 +672,30 @@ class SequentialThinkingServer {
       if (searchData.limit !== undefined && (typeof searchData.limit !== 'number' || searchData.limit < 1 || searchData.limit > 50)) {
         throw new Error('Invalid searchSequence.limit: must be a number between 1 and 50');
       }
+      if (searchData.contentSearch !== undefined && typeof searchData.contentSearch !== 'boolean') {
+        throw new Error('Invalid searchSequence.contentSearch: must be a boolean');
+      }
+    }
+
+    if (data.exportSequence !== undefined) {
+      if (typeof data.exportSequence !== 'object' || data.exportSequence === null) {
+        throw new Error('Invalid exportSequence: must be an object');
+      }
+      const exportData = data.exportSequence as Record<string, unknown>;
+      if (typeof exportData.id !== 'string' || exportData.id.length === 0) {
+        throw new Error('Invalid exportSequence.id: must be a non-empty string');
+      }
+    }
+
+    if (data.importSequence !== undefined) {
+      if (typeof data.importSequence !== 'object' || data.importSequence === null) {
+        throw new Error('Invalid importSequence: must be an object');
+      }
+      const importData = data.importSequence as Record<string, unknown>;
+      if (typeof importData.data !== 'object' || importData.data === null) {
+        throw new Error('Invalid importSequence.data: must be an object');
+      }
+      // TODO: Add more detailed validation for sequence and thoughts data
     }
 
     // Validate base thought data
@@ -533,7 +706,9 @@ class SequentialThinkingServer {
       sequenceId: data.sequenceId as string | undefined,
       saveSequence: data.saveSequence as { title: string; description?: string } | undefined,
       loadSequence: data.loadSequence as { id: string } | undefined,
-      searchSequence: data.searchSequence as { query?: string; limit?: number } | undefined
+      searchSequence: data.searchSequence as { query?: string; limit?: number; contentSearch?: boolean } | undefined,
+      exportSequence: data.exportSequence as { id: string } | undefined,
+      importSequence: data.importSequence as { data: { sequence: SequenceRecord; thoughts: ThoughtRecord[] } } | undefined
     };
   }
 
@@ -783,11 +958,15 @@ class SequentialThinkingServer {
     const totalVerifications = verificationStatus.confirmed + verificationStatus.refuted + verificationStatus.partial + verificationStatus.pending;
     const verificationRate = totalVerifications > 0 ? verificationStatus.confirmed / totalVerifications : 0;
     
+    // Analyze thought relationships from current memory
+    const relationshipAnalysis = this.analyzeThoughtRelationships();
+    
     return {
       totalSequences: sequences.length,
       totalThoughts,
       averageThoughtsPerSequence: Math.round(averageThoughtsPerSequence * 100) / 100,
       verificationRate: Math.round(verificationRate * 100) / 100,
+      relationshipPatterns: relationshipAnalysis,
       currentMemoryUsage: {
         thoughtHistory: this.thoughtHistory.length,
         branches: Object.keys(this.branches).length,
@@ -797,6 +976,45 @@ class SequentialThinkingServer {
           thoughtsPerBranchLimit: this.maxThoughtsPerBranch
         }
       }
+    };
+  }
+
+  private analyzeThoughtRelationships(): object {
+    const relationships: { [key: number]: number[] } = {};
+    const connectionCounts: { [key: number]: number } = {};
+    
+    // Analyze relationships in current thought history
+    this.thoughtHistory.forEach(thought => {
+      if (thought.relatedTo && thought.relatedTo.length > 0) {
+        relationships[thought.thoughtNumber] = thought.relatedTo;
+        
+        // Count connections
+        thought.relatedTo.forEach(relatedThought => {
+          connectionCounts[relatedThought] = (connectionCounts[relatedThought] || 0) + 1;
+        });
+      }
+    });
+    
+    // Find most connected thoughts
+    const mostConnectedThoughts = Object.entries(connectionCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([thoughtNumber, connections]) => ({
+        thoughtNumber: parseInt(thoughtNumber),
+        connections,
+        thought: this.thoughtHistory.find(t => t.thoughtNumber === parseInt(thoughtNumber))?.thought.substring(0, 100) + '...' || 'Unknown'
+      }));
+    
+    // Calculate relationship density
+    const totalThoughts = this.thoughtHistory.length;
+    const thoughtsWithRelationships = Object.keys(relationships).length;
+    const relationshipDensity = totalThoughts > 0 ? thoughtsWithRelationships / totalThoughts : 0;
+    
+    return {
+      totalRelationships: Object.keys(relationships).length,
+      relationshipDensity: Math.round(relationshipDensity * 100) / 100,
+      mostConnectedThoughts,
+      relationshipMap: relationships
     };
   }
 
@@ -829,6 +1047,8 @@ class SequentialThinkingServer {
         verificationResult: thought.verificationResult,
         isRevision: thought.isRevision,
         branchId: thought.branchId,
+        relatedTo: thought.relatedTo || [],
+        connectionCount: thought.relatedTo ? thought.relatedTo.length : 0,
         timestamp: new Date().toISOString()
       })),
       totalThoughts: this.thoughtHistory.length,
@@ -1207,7 +1427,8 @@ ${originalApproach}
       if (validatedInput.searchSequence) {
         const searchResults = await this.searchSequences(
           validatedInput.searchSequence.query,
-          validatedInput.searchSequence.limit || 10
+          validatedInput.searchSequence.limit || 10,
+          validatedInput.searchSequence.contentSearch || false
         );
         
         return {
@@ -1229,6 +1450,32 @@ ${originalApproach}
               message: validatedInput.searchSequence.query 
                 ? `Found ${searchResults.totalCount} sequences matching "${validatedInput.searchSequence.query}"`
                 : `Listed ${searchResults.totalCount} sequences`
+            }, null, 2)
+          }]
+        };
+      }
+
+      // Handle sequence export if requested
+      if (validatedInput.exportSequence) {
+        const exportData = await this.exportSequence(validatedInput.exportSequence.id);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(exportData, null, 2)
+          }]
+        };
+      }
+
+      // Handle sequence import if requested
+      if (validatedInput.importSequence) {
+        const newSequenceId = await this.importSequence(validatedInput.importSequence.data);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              message: `Sequence imported successfully with ID: ${newSequenceId}`,
+              sequenceId: newSequenceId,
+              thoughtCount: validatedInput.importSequence.data.thoughts.length
             }, null, 2)
           }]
         };
@@ -1530,6 +1777,9 @@ Key features:
 - PERSISTENT SEQUENCES: Save and load thinking sequences across sessions
 - Continue complex reasoning over days or weeks
 - Build on previous conclusions and insights
+- ENHANCED SEARCH: Full-text search across thought content with contentSearch parameter
+- EXPORT/IMPORT: Complete sequence backup and sharing capabilities
+- RELATIONSHIP INSIGHTS: Enhanced resources show thought connections and patterns
 
 Parameters explained:
 - thought: Your current thinking step, which can include:
@@ -1553,6 +1803,9 @@ Parameters explained:
 - relatedTo: Array of thought numbers this thought relates to or builds upon
 - saveSequence: Object with 'title' and optional 'description' to save current thoughts as a sequence
 - loadSequence: Object with 'id' to load a previously saved sequence
+- searchSequence: Object with 'query', 'limit', and 'contentSearch' to search sequences with fuzzy matching and full-text search
+- exportSequence: Object with 'id' to export sequence as JSON for backup/sharing
+- importSequence: Object with 'data' to import sequence from JSON backup
 - sequenceId: ID of the current sequence (for continuing existing sequences)
 
 You should:
@@ -1678,9 +1931,50 @@ You should:
             description: "Maximum number of results to return (default: 10)",
             minimum: 1,
             maximum: 50
+          },
+          contentSearch: {
+            type: "boolean",
+            description: "If true, search within thought content using full-text search (default: false)"
           }
         },
-        description: "Search for sequences by title/description or list all sequences"
+        description: "Search for sequences by title/description or within thought content"
+      },
+      exportSequence: {
+        type: "object",
+        properties: {
+          id: {
+            type: "string",
+            description: "ID of the sequence to export",
+            minLength: 1
+          }
+        },
+        required: ["id"],
+        description: "Export sequence as JSON for backup or sharing"
+      },
+      importSequence: {
+        type: "object",
+        properties: {
+          data: {
+            type: "object",
+            description: "Sequence data to import (must contain sequence and thoughts)",
+            properties: {
+              sequence: {
+                type: "object",
+                description: "Sequence metadata"
+              },
+              thoughts: {
+                type: "array",
+                description: "Array of thought records",
+                items: {
+                  type: "object"
+                }
+              }
+            },
+            required: ["sequence", "thoughts"]
+          }
+        },
+        required: ["data"],
+        description: "Import sequence from JSON backup"
       }
     },
     required: ["thought", "nextThoughtNeeded", "thoughtNumber", "totalThoughts"]

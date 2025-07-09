@@ -40,6 +40,7 @@ The server now exposes **5 live contextual resources** that provide real-time ac
 #### patterns://analysis
 - **Thinking patterns analysis** across all your sequences
 - **Performance metrics** like average thoughts per sequence, verification rates
+- **Relationship patterns** showing thought connections and most connected thoughts
 - **Memory usage insights** and cognitive load assessment
 
 #### verification://status
@@ -50,6 +51,7 @@ The server now exposes **5 live contextual resources** that provide real-time ac
 #### thoughts://recent
 - **Recent thoughts overview** across all sequences
 - **Activity metrics** including revisions, branches, hypothesis/verification counts
+- **Relationship insights** showing thought connections and connection counts
 - **Cross-sequence insights** and thinking velocity
 
 ### 🔥 Prompts (NEW)
@@ -111,7 +113,9 @@ Facilitates a detailed, step-by-step thinking process for problem-solving and an
 - `relatedTo` (array): Array of thought numbers this relates to (max 50 items)
 - **🔥 NEW: `saveSequence`** (object): Save current thoughts as a sequence `{ title: "My Analysis", description: "Optional" }`
 - **🔥 NEW: `loadSequence`** (object): Load a previously saved sequence `{ id: "sequence-id" }`
-- **🔥 NEW: `searchSequence`** (object): Search for sequences with fuzzy matching `{ query: "strategy", limit: 10 }`
+- **🔥 NEW: `searchSequence`** (object): Search for sequences with fuzzy matching `{ query: "strategy", limit: 10, contentSearch: true }`
+- **🔥 NEW: `exportSequence`** (object): Export sequence as JSON `{ id: "sequence-id" }`
+- **🔥 NEW: `importSequence`** (object): Import sequence from JSON `{ data: {...} }`
 - **🔥 NEW: `sequenceId`** (string): ID of the current sequence for automatic persistence
 
 **Enhanced Response:**
@@ -161,7 +165,7 @@ The Sequential Thinking tool is designed for:
 **Never remember sequence IDs again!** Use powerful fuzzy search with Romanian/Russian support:
 
 ```javascript
-// Search for sequences (fuzzy matching)
+// Search for sequences (fuzzy matching titles/descriptions)
 {
   "thought": "I need to find my analysis",
   "thoughtNumber": 1,
@@ -170,6 +174,19 @@ The Sequential Thinking tool is designed for:
   "searchSequence": {
     "query": "strategy",
     "limit": 10
+  }
+}
+
+// NEW: Search within thought content using FTS
+{
+  "thought": "Find sequences containing specific thoughts",
+  "thoughtNumber": 1,
+  "totalThoughts": 1,
+  "nextThoughtNeeded": false,
+  "searchSequence": {
+    "query": "market analysis",
+    "limit": 10,
+    "contentSearch": true
   }
 }
 
@@ -209,9 +226,10 @@ The Sequential Thinking tool is designed for:
 
 1. **Normal thinking**: Use the tool as usual for sequential thinking
 2. **Save sequence**: Add `saveSequence: { title: "My Analysis" }` to save your progress
-3. **🔍 Find sequence**: Use `searchSequence` to find your work (fuzzy search!)
+3. **🔍 Find sequence**: Use `searchSequence` to find your work (fuzzy search + content search!)
 4. **Resume**: Use `loadSequence: { id: "found-sequence-id" }` to continue
 5. **Automatic persistence**: All subsequent thoughts are automatically saved
+6. **🎆 NEW: Export/Import**: Use `exportSequence`/`importSequence` for backup/sharing
 
 ### Example: Saving a Sequence
 
@@ -244,6 +262,43 @@ The Sequential Thinking tool is designed for:
 }
 
 // Response shows matching sequences with titles, descriptions, and IDs
+```
+
+### Example: Exporting a Sequence
+
+```javascript
+// Export sequence as JSON for backup or sharing
+{
+  "thought": "I want to export my analysis for backup",
+  "thoughtNumber": 1,
+  "totalThoughts": 1,
+  "nextThoughtNeeded": false,
+  "exportSequence": {
+    "id": "seq-abc123def456"
+  }
+}
+
+// Response contains complete sequence data in JSON format
+```
+
+### Example: Importing a Sequence
+
+```javascript
+// Import sequence from JSON backup
+{
+  "thought": "I want to import my backed up analysis",
+  "thoughtNumber": 1,
+  "totalThoughts": 1,
+  "nextThoughtNeeded": false,
+  "importSequence": {
+    "data": {
+      "sequence": { /* sequence metadata */ },
+      "thoughts": [ /* array of thoughts */ ]
+    }
+  }
+}
+
+// Response shows new sequence ID and import confirmation
 ```
 
 ### Example: Loading a Sequence
@@ -385,6 +440,14 @@ For Docker installation:
 - **Automatic persistence**: Thoughts saved automatically when sequence is active
 - **Seamless integration**: Works with all existing features (revisions, branches, verification)
 - **Backward compatibility**: All existing functionality preserved
+
+### 🔥 ENHANCED SEARCH & PORTABILITY (NEW)
+
+- **Full-text search**: Search within thought content using SQLite FTS
+- **Content search**: Find sequences containing specific thoughts or ideas
+- **Export/Import**: Complete sequence backup and sharing capabilities
+- **JSON portability**: Export sequences as JSON for backup or migration
+- **Relationship insights**: Enhanced resources show thought connections
 
 ### Memory Management
 
