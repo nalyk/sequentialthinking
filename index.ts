@@ -6,6 +6,12 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
   Tool,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+  Resource,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
+  Prompt,
 } from "@modelcontextprotocol/sdk/types.js";
 // Fixed chalk import for ESM
 import chalk from 'chalk';
@@ -737,6 +743,462 @@ class SequentialThinkingServer {
 └${border}┘`;
   }
 
+  public async getCurrentSequenceResource(): Promise<object> {
+    const currentSequence = this.currentSequenceId ? await this.loadSequence(this.currentSequenceId) : null;
+    const verificationStatus = this.getVerificationStatus();
+    const unverifiedHypotheses = this.getHypothesesNeedingVerification();
+    
+    return {
+      id: this.currentSequenceId,
+      title: currentSequence?.title || null,
+      thoughtCount: this.thoughtHistory.length,
+      verificationStatus,
+      lastThought: this.thoughtHistory.length > 0 ? this.thoughtHistory[this.thoughtHistory.length - 1].thought : null,
+      unverifiedHypothesesCount: unverifiedHypotheses.length,
+      persistenceEnabled: this.currentSequenceId !== null,
+      totalBranches: Object.keys(this.branches).length
+    };
+  }
+
+  public async getSequenceLibraryResource(): Promise<object> {
+    const searchResults = await this.searchSequences(undefined, 50);
+    return {
+      sequences: searchResults.sequences,
+      totalCount: searchResults.totalCount,
+      recentActivity: {
+        totalSequences: searchResults.totalCount,
+        lastModified: searchResults.sequences.length > 0 ? searchResults.sequences[0].lastModified : null
+      }
+    };
+  }
+
+  public async getThinkingPatternsResource(): Promise<object> {
+    const searchResults = await this.searchSequences(undefined, 1000);
+    const sequences = searchResults.sequences;
+    
+    const totalThoughts = sequences.reduce((sum, seq) => sum + seq.thoughtCount, 0);
+    const averageThoughtsPerSequence = sequences.length > 0 ? totalThoughts / sequences.length : 0;
+    
+    const verificationStatus = this.getVerificationStatus();
+    const totalVerifications = verificationStatus.confirmed + verificationStatus.refuted + verificationStatus.partial + verificationStatus.pending;
+    const verificationRate = totalVerifications > 0 ? verificationStatus.confirmed / totalVerifications : 0;
+    
+    return {
+      totalSequences: sequences.length,
+      totalThoughts,
+      averageThoughtsPerSequence: Math.round(averageThoughtsPerSequence * 100) / 100,
+      verificationRate: Math.round(verificationRate * 100) / 100,
+      currentMemoryUsage: {
+        thoughtHistory: this.thoughtHistory.length,
+        branches: Object.keys(this.branches).length,
+        memoryLimits: {
+          thoughtHistoryLimit: this.maxThoughtHistory,
+          branchLimit: this.maxBranches,
+          thoughtsPerBranchLimit: this.maxThoughtsPerBranch
+        }
+      }
+    };
+  }
+
+  public async getVerificationStatusResource(): Promise<object> {
+    const verificationStatus = this.getVerificationStatus();
+    const unverifiedHypotheses = this.getHypothesesNeedingVerification();
+    
+    return {
+      verificationStatus,
+      unverifiedHypothesesCount: unverifiedHypotheses.length,
+      unverifiedHypotheses: unverifiedHypotheses.map(h => ({
+        thoughtNumber: h.thoughtNumber,
+        thought: h.thought.substring(0, 100) + (h.thought.length > 100 ? '...' : ''),
+        timestamp: new Date().toISOString()
+      })),
+      verificationRate: verificationStatus.confirmed + verificationStatus.refuted + verificationStatus.partial + verificationStatus.pending > 0 
+        ? verificationStatus.confirmed / (verificationStatus.confirmed + verificationStatus.refuted + verificationStatus.partial + verificationStatus.pending)
+        : 0
+    };
+  }
+
+  public async getRecentThoughtsResource(): Promise<object> {
+    const recentThoughts = this.thoughtHistory.slice(-10);
+    
+    return {
+      recentThoughts: recentThoughts.map(thought => ({
+        thoughtNumber: thought.thoughtNumber,
+        thought: thought.thought.substring(0, 200) + (thought.thought.length > 200 ? '...' : ''),
+        thoughtType: thought.thoughtType,
+        verificationResult: thought.verificationResult,
+        isRevision: thought.isRevision,
+        branchId: thought.branchId,
+        timestamp: new Date().toISOString()
+      })),
+      totalThoughts: this.thoughtHistory.length,
+      activityMetrics: {
+        revisionsCount: this.thoughtHistory.filter(t => t.isRevision).length,
+        branchesCount: Object.keys(this.branches).length,
+        hypothesesCount: this.thoughtHistory.filter(t => t.thoughtType === 'hypothesis').length,
+        verificationsCount: this.thoughtHistory.filter(t => t.thoughtType === 'verification').length
+      }
+    };
+  }
+
+  public generatePrompt(name: string, args: Record<string, string>): string {
+    switch (name) {
+      case "start_analysis":
+        return this.generateStartAnalysisPrompt(args);
+      case "hypothesis_verification":
+        return this.generateHypothesisVerificationPrompt(args);
+      case "sequence_synthesis":
+        return this.generateSequenceSynthesisPrompt(args);
+      case "branch_exploration":
+        return this.generateBranchExplorationPrompt(args);
+      case "problem_decomposition":
+        return this.generateProblemDecompositionPrompt(args);
+      default:
+        throw new Error(`Unknown prompt: ${name}`);
+    }
+  }
+
+  private generateStartAnalysisPrompt(args: Record<string, string>): string {
+    const problem = args.problem || "[Problem to analyze]";
+    const context = args.context || "[Relevant context and constraints]";
+    const goals = args.goals || "[Analysis goals and objectives]";
+
+    return `# Systematic Analysis Framework
+
+## Problem Definition
+${problem}
+
+## Context & Constraints
+${context}
+
+## Analysis Goals
+${goals}
+
+## Initial Hypotheses
+- Hypothesis 1: [First potential explanation or solution]
+- Hypothesis 2: [Alternative explanation or approach]
+- Hypothesis 3: [Additional perspective to consider]
+
+## Evidence Gathering Plan
+1. [First source of information to investigate]
+2. [Second type of evidence to collect]
+3. [Third validation approach]
+
+## Analysis Structure
+1. **Problem Decomposition**: Break down the main problem into smaller, manageable parts
+2. **Hypothesis Generation**: Develop multiple potential explanations or solutions
+3. **Evidence Collection**: Gather relevant data and information
+4. **Hypothesis Testing**: Systematically evaluate each hypothesis
+5. **Synthesis**: Combine insights into actionable conclusions
+
+## Next Steps
+- Begin with: [First concrete action to take]
+- Key questions to address: [Critical questions that need answers]
+- Success criteria: [How to measure progress and success]`;
+  }
+
+  private generateHypothesisVerificationPrompt(args: Record<string, string>): string {
+    const hypothesis = args.hypothesis || "[Hypothesis to verify]";
+    const evidenceSources = args.evidence_sources || "[Available evidence sources]";
+    const testMethods = args.test_methods || "[Methods for testing]";
+
+    return `# Hypothesis Verification Framework
+
+## Hypothesis Statement
+${hypothesis}
+
+## Verification Approach
+
+### Evidence Sources
+${evidenceSources}
+
+### Testing Methods
+${testMethods}
+
+## Verification Steps
+
+### 1. Evidence Collection
+- [ ] Primary evidence: [Main source of validation]
+- [ ] Secondary evidence: [Supporting information]
+- [ ] Contradictory evidence: [Look for counter-examples]
+
+### 2. Testing Criteria
+- **Confirmation criteria**: What evidence would confirm this hypothesis?
+- **Refutation criteria**: What evidence would refute this hypothesis?
+- **Partial confirmation**: What would suggest the hypothesis is partially correct?
+
+### 3. Evaluation Framework
+- **Strength of evidence**: How reliable and comprehensive is the evidence?
+- **Alternative explanations**: Are there other ways to interpret the evidence?
+- **Confidence level**: How certain can we be about the conclusion?
+
+## Verification Results
+- **Status**: [Confirmed/Refuted/Partial/Pending]
+- **Key evidence**: [Most important supporting or contradicting evidence]
+- **Confidence**: [Low/Medium/High]
+- **Implications**: [What this means for the broader analysis]
+
+## Next Actions
+- [ ] If confirmed: [Next steps based on confirmed hypothesis]
+- [ ] If refuted: [Alternative approaches to consider]
+- [ ] If partial: [Areas needing further investigation]`;
+  }
+
+  private generateSequenceSynthesisPrompt(args: Record<string, string>): string {
+    const sequenceTitle = args.sequence_title || "[Sequence Title]";
+    const focusAreas = args.focus_areas || "[Areas to focus on]";
+
+    return `# Thinking Sequence Synthesis
+
+## Sequence Overview
+**Title**: ${sequenceTitle}
+**Focus Areas**: ${focusAreas}
+
+## Key Insights Summary
+
+### Primary Findings
+1. [First major insight or conclusion]
+2. [Second significant finding]
+3. [Third important realization]
+
+### Supporting Evidence
+- [Key evidence that supports the main findings]
+- [Additional validation or confirmation]
+- [Patterns identified across different thoughts]
+
+## Thought Evolution Analysis
+
+### Initial Assumptions
+- [What was initially assumed or believed]
+- [Starting hypotheses or approaches]
+
+### Refinements and Revisions
+- [How thinking evolved throughout the sequence]
+- [Key turning points or moments of insight]
+- [Assumptions that were challenged or changed]
+
+### Final Position
+- [Current understanding or conclusion]
+- [Confidence level in the findings]
+
+## Decision Points and Actions
+
+### Key Decisions Made
+1. [Important decision reached]
+2. [Another significant choice]
+3. [Additional decision or conclusion]
+
+### Action Items
+- [ ] [Immediate action to take]
+- [ ] [Follow-up task or investigation]
+- [ ] [Long-term objective or goal]
+
+### Unresolved Issues
+- [Questions that remain unanswered]
+- [Areas requiring further investigation]
+- [Potential future considerations]
+
+## Reflection and Learning
+
+### What Worked Well
+- [Effective thinking strategies used]
+- [Successful approaches or methods]
+
+### Areas for Improvement
+- [Aspects that could be enhanced]
+- [Different approaches to consider next time]
+
+### Lessons Learned
+- [Key insights about the thinking process itself]
+- [Patterns to remember for future analysis]`;
+  }
+
+  private generateBranchExplorationPrompt(args: Record<string, string>): string {
+    const originalApproach = args.original_approach || "[Original approach or perspective]";
+    const stakeholders = args.stakeholders || "[Relevant stakeholders]";
+    const constraints = args.constraints || "[Constraints and limitations]";
+
+    return `# Alternative Perspective Exploration
+
+## Original Approach
+${originalApproach}
+
+## Stakeholder Analysis
+**Key Stakeholders**: ${stakeholders}
+
+### Perspective 1: [First Stakeholder]
+- **Priorities**: [What matters most to this stakeholder]
+- **Concerns**: [Potential objections or worries]
+- **Preferred approach**: [How they would handle this situation]
+- **Success metrics**: [How they would measure success]
+
+### Perspective 2: [Second Stakeholder]
+- **Priorities**: [What matters most to this stakeholder]
+- **Concerns**: [Potential objections or worries]
+- **Preferred approach**: [How they would handle this situation]
+- **Success metrics**: [How they would measure success]
+
+### Perspective 3: [Third Stakeholder]
+- **Priorities**: [What matters most to this stakeholder]
+- **Concerns**: [Potential objections or worries]
+- **Preferred approach**: [How they would handle this situation]
+- **Success metrics**: [How they would measure success]
+
+## Constraint Analysis
+**Current Constraints**: ${constraints}
+
+### Alternative Scenarios
+- **If constraint X was removed**: [How would the approach change?]
+- **If we had more time**: [What additional options would be available?]
+- **If resources were unlimited**: [What would be the ideal approach?]
+
+## Devil's Advocate Analysis
+- **Potential flaws in original approach**: [What could go wrong?]
+- **Overlooked factors**: [What might have been missed?]
+- **Unintended consequences**: [What negative outcomes might occur?]
+
+## Alternative Approaches
+
+### Option A: [First Alternative]
+- **Description**: [How this approach differs]
+- **Advantages**: [Benefits of this approach]
+- **Disadvantages**: [Potential drawbacks]
+- **Feasibility**: [How realistic this option is]
+
+### Option B: [Second Alternative]
+- **Description**: [How this approach differs]
+- **Advantages**: [Benefits of this approach]
+- **Disadvantages**: [Potential drawbacks]
+- **Feasibility**: [How realistic this option is]
+
+### Option C: [Third Alternative]
+- **Description**: [How this approach differs]
+- **Advantages**: [Benefits of this approach]
+- **Disadvantages**: [Potential drawbacks]
+- **Feasibility**: [How realistic this option is]
+
+## Integration and Synthesis
+- **Common themes**: [What appears across multiple perspectives]
+- **Complementary approaches**: [How different perspectives might work together]
+- **Hybrid solutions**: [Combinations of different approaches]
+
+## Next Steps
+- [ ] [Immediate action to explore alternatives]
+- [ ] [Stakeholder consultation or feedback]
+- [ ] [Pilot testing or small-scale implementation]`;
+  }
+
+  private generateProblemDecompositionPrompt(args: Record<string, string>): string {
+    const mainProblem = args.main_problem || "[Main problem to decompose]";
+    const complexityLevel = args.complexity_level || "[Complexity assessment]";
+    const domain = args.domain || "[Problem domain]";
+
+    return `# Problem Decomposition Framework
+
+## Problem Overview
+**Main Problem**: ${mainProblem}
+**Complexity Level**: ${complexityLevel}
+**Domain**: ${domain}
+
+## Problem Breakdown
+
+### Level 1: Primary Components
+1. **Component A**: [First major aspect of the problem]
+   - Description: [What this component involves]
+   - Difficulty: [How challenging this part is]
+   - Dependencies: [What this depends on]
+
+2. **Component B**: [Second major aspect]
+   - Description: [What this component involves]
+   - Difficulty: [How challenging this part is]
+   - Dependencies: [What this depends on]
+
+3. **Component C**: [Third major aspect]
+   - Description: [What this component involves]
+   - Difficulty: [How challenging this part is]
+   - Dependencies: [What this depends on]
+
+### Level 2: Sub-Components
+#### Component A Sub-tasks:
+- [ ] [Specific task 1]
+- [ ] [Specific task 2]
+- [ ] [Specific task 3]
+
+#### Component B Sub-tasks:
+- [ ] [Specific task 1]
+- [ ] [Specific task 2]
+- [ ] [Specific task 3]
+
+#### Component C Sub-tasks:
+- [ ] [Specific task 1]
+- [ ] [Specific task 2]
+- [ ] [Specific task 3]
+
+## Dependency Analysis
+
+### Critical Path
+1. [First step that must be completed]
+2. [Second step that depends on the first]
+3. [Third step in the sequence]
+
+### Parallel Workstreams
+- **Stream 1**: [Tasks that can be done simultaneously]
+- **Stream 2**: [Independent tasks that can run in parallel]
+- **Stream 3**: [Additional parallel work]
+
+## Priority Assessment
+
+### High Priority (Critical)
+- [Most important components to address first]
+- [Components that block other work]
+
+### Medium Priority (Important)
+- [Components that are significant but not blocking]
+- [Items that enhance the solution]
+
+### Low Priority (Nice-to-have)
+- [Components that can be addressed later]
+- [Enhancements or optimizations]
+
+## Resource Requirements
+
+### For Component A:
+- **Skills needed**: [Required expertise]
+- **Time estimate**: [How long this might take]
+- **Resources**: [What's needed to complete this]
+
+### For Component B:
+- **Skills needed**: [Required expertise]
+- **Time estimate**: [How long this might take]
+- **Resources**: [What's needed to complete this]
+
+### For Component C:
+- **Skills needed**: [Required expertise]
+- **Time estimate**: [How long this might take]
+- **Resources**: [What's needed to complete this]
+
+## Risk Assessment
+- **High-risk components**: [Parts most likely to cause problems]
+- **Mitigation strategies**: [How to reduce risks]
+- **Contingency plans**: [Alternative approaches if things go wrong]
+
+## Success Metrics
+- **Component A success**: [How to measure completion]
+- **Component B success**: [How to measure completion]
+- **Component C success**: [How to measure completion]
+- **Overall success**: [How to measure total problem resolution]
+
+## Implementation Plan
+1. **Phase 1**: [First set of components to tackle]
+2. **Phase 2**: [Second phase of work]
+3. **Phase 3**: [Final phase or ongoing work]
+
+## Next Actions
+- [ ] [Immediate first step]
+- [ ] [Second priority action]
+- [ ] [Third step in the process]`;
+  }
+
   public async processThought(input: unknown): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
     try {
       const validatedInput = this.validateSequenceThoughtData(input);
@@ -937,6 +1399,109 @@ class SequentialThinkingServer {
   }
 }
 
+const THINKING_PROMPTS: Record<string, Prompt> = {
+  start_analysis: {
+    name: "start_analysis",
+    description: "Structured framework for beginning systematic analysis",
+    arguments: [
+      {
+        name: "problem",
+        description: "The main problem or question to analyze",
+        required: true
+      },
+      {
+        name: "context",
+        description: "Relevant background information and constraints",
+        required: false
+      },
+      {
+        name: "goals",
+        description: "What you want to achieve through this analysis",
+        required: false
+      }
+    ]
+  },
+  hypothesis_verification: {
+    name: "hypothesis_verification",
+    description: "Template for systematically verifying a hypothesis",
+    arguments: [
+      {
+        name: "hypothesis",
+        description: "The hypothesis to verify",
+        required: true
+      },
+      {
+        name: "evidence_sources",
+        description: "Available sources of evidence",
+        required: false
+      },
+      {
+        name: "test_methods",
+        description: "Methods for testing the hypothesis",
+        required: false
+      }
+    ]
+  },
+  sequence_synthesis: {
+    name: "sequence_synthesis",
+    description: "Template for synthesizing insights from completed thinking sequences",
+    arguments: [
+      {
+        name: "sequence_title",
+        description: "Title of the sequence being synthesized",
+        required: false
+      },
+      {
+        name: "focus_areas",
+        description: "Specific areas to focus on in the synthesis",
+        required: false
+      }
+    ]
+  },
+  branch_exploration: {
+    name: "branch_exploration",
+    description: "Template for exploring alternative perspectives and approaches",
+    arguments: [
+      {
+        name: "original_approach",
+        description: "The original approach or perspective",
+        required: true
+      },
+      {
+        name: "stakeholders",
+        description: "Different stakeholders to consider",
+        required: false
+      },
+      {
+        name: "constraints",
+        description: "Constraints that might affect alternatives",
+        required: false
+      }
+    ]
+  },
+  problem_decomposition: {
+    name: "problem_decomposition",
+    description: "Template for breaking down complex problems into manageable parts",
+    arguments: [
+      {
+        name: "main_problem",
+        description: "The main problem to decompose",
+        required: true
+      },
+      {
+        name: "complexity_level",
+        description: "How complex the problem appears to be",
+        required: false
+      },
+      {
+        name: "domain",
+        description: "The domain or field this problem belongs to",
+        required: false
+      }
+    ]
+  }
+};
+
 const SEQUENTIAL_THINKING_TOOL: Tool = {
   name: "sequentialthinking",
   description: `A detailed tool for dynamic and reflective problem-solving through thoughts.
@@ -1130,6 +1695,8 @@ const server = new Server(
   {
     capabilities: {
       tools: {},
+      resources: {},
+      prompts: {},
     },
   }
 );
@@ -1152,6 +1719,137 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }],
     isError: true
   };
+});
+
+server.setRequestHandler(ListResourcesRequestSchema, async () => {
+  return {
+    resources: [
+      {
+        uri: "sequence://current",
+        name: "Current Sequence",
+        description: "Live current thinking sequence data",
+        mimeType: "application/json"
+      },
+      {
+        uri: "sequences://library",
+        name: "Sequence Library",
+        description: "Browse all saved sequences",
+        mimeType: "application/json"
+      },
+      {
+        uri: "patterns://analysis",
+        name: "Thinking Patterns",
+        description: "User thinking patterns analysis",
+        mimeType: "application/json"
+      },
+      {
+        uri: "verification://status",
+        name: "Verification Status",
+        description: "Real-time verification dashboard",
+        mimeType: "application/json"
+      },
+      {
+        uri: "thoughts://recent",
+        name: "Recent Thoughts",
+        description: "Recent thoughts across all sequences",
+        mimeType: "application/json"
+      }
+    ]
+  };
+});
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const uri = request.params.uri;
+  
+  try {
+    let resourceData: object;
+    
+    switch (uri) {
+      case "sequence://current":
+        resourceData = await thinkingServer.getCurrentSequenceResource();
+        break;
+      case "sequences://library":
+        resourceData = await thinkingServer.getSequenceLibraryResource();
+        break;
+      case "patterns://analysis":
+        resourceData = await thinkingServer.getThinkingPatternsResource();
+        break;
+      case "verification://status":
+        resourceData = await thinkingServer.getVerificationStatusResource();
+        break;
+      case "thoughts://recent":
+        resourceData = await thinkingServer.getRecentThoughtsResource();
+        break;
+      default:
+        return {
+          contents: [{
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify({ error: `Unknown resource: ${uri}` }, null, 2)
+          }]
+        };
+    }
+    
+    return {
+      contents: [{
+        uri,
+        mimeType: "application/json",
+        text: JSON.stringify(resourceData, null, 2)
+      }]
+    };
+  } catch (error) {
+    return {
+      contents: [{
+        uri,
+        mimeType: "application/json",
+        text: JSON.stringify({ 
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString()
+        }, null, 2)
+      }]
+    };
+  }
+});
+
+server.setRequestHandler(ListPromptsRequestSchema, async () => {
+  return {
+    prompts: Object.values(THINKING_PROMPTS)
+  };
+});
+
+server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+  const name = request.params.name;
+  const args = request.params.arguments || {};
+  
+  try {
+    const promptText = thinkingServer.generatePrompt(name, args);
+    
+    return {
+      description: THINKING_PROMPTS[name]?.description || "Thinking framework template",
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: promptText
+          }
+        }
+      ]
+    };
+  } catch (error) {
+    return {
+      description: "Error generating prompt",
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`
+          }
+        }
+      ]
+    };
+  }
 });
 
 async function runServer() {

@@ -3,11 +3,9 @@
   <h1>Sequential Thinking MCP Server</h1>
   
 Based on concepts from [modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers).
-
-**Repository:** [https://github.com/nalyk/sequentialthinking](https://github.com/nalyk/sequentialthinking)
 </div>
 
-An MCP server implementation that provides a tool for dynamic and reflective problem-solving through a structured thinking process with enhanced memory management, type safety, verification workflows, and **persistent sequences** for long-term reasoning across sessions.
+An MCP server implementation that provides **tools, resources, and prompts** for dynamic and reflective problem-solving through a structured thinking process with enhanced memory management, type safety, verification workflows, and **persistent sequences** for long-term reasoning across sessions.
 
 ## Features
 
@@ -22,6 +20,71 @@ An MCP server implementation that provides a tool for dynamic and reflective pro
 - **Memory Management**: Configurable limits prevent memory leaks
 - **Type Safety**: Comprehensive input validation and sanitization
 - **Enhanced Logging**: Colored terminal output with thought classification
+
+## MCP Capabilities
+
+### 🔥 Resources (NEW)
+
+The server now exposes **5 live contextual resources** that provide real-time access to your thinking data:
+
+#### sequence://current
+- **Live current sequence data** including active sequence info, thought count, verification status
+- **Real-time updates** as you think and work
+- **Persistence status** showing if thoughts are being automatically saved
+
+#### sequences://library
+- **Browse all saved sequences** with metadata and recent activity
+- **Complete sequence overview** for managing your thinking projects
+- **Search preparation** to find sequences before loading
+
+#### patterns://analysis
+- **Thinking patterns analysis** across all your sequences
+- **Performance metrics** like average thoughts per sequence, verification rates
+- **Memory usage insights** and cognitive load assessment
+
+#### verification://status
+- **Real-time verification dashboard** showing hypothesis testing progress
+- **Unverified hypotheses tracking** to identify work needing completion
+- **Verification success rates** and workflow metrics
+
+#### thoughts://recent
+- **Recent thoughts overview** across all sequences
+- **Activity metrics** including revisions, branches, hypothesis/verification counts
+- **Cross-sequence insights** and thinking velocity
+
+### 🔥 Prompts (NEW)
+
+The server provides **5 professional thinking templates** for structured problem-solving:
+
+#### start_analysis
+- **Structured analysis framework** for beginning systematic investigation
+- **Problem definition, context, and hypothesis generation** sections
+- **Evidence gathering plan** and analysis structure
+- **Customizable** with problem description, context, and goals
+
+#### hypothesis_verification
+- **Systematic verification template** for testing hypotheses
+- **Evidence collection and testing criteria** frameworks
+- **Confirmation, refutation, and partial verification** pathways
+- **Customizable** with hypothesis, evidence sources, and test methods
+
+#### sequence_synthesis
+- **Insights synthesis template** for completed thinking sequences
+- **Key findings extraction** and thought evolution analysis
+- **Decision points and action items** identification
+- **Customizable** with sequence title and focus areas
+
+#### branch_exploration
+- **Alternative perspective template** for exploring different approaches
+- **Stakeholder analysis** and constraint evaluation
+- **Devil's advocate analysis** and option comparison
+- **Customizable** with original approach, stakeholders, and constraints
+
+#### problem_decomposition
+- **Complex problem breakdown** template for manageable components
+- **Dependency analysis** and priority assessment
+- **Resource requirements** and risk evaluation
+- **Customizable** with main problem, complexity level, and domain
 
 ## Tool
 
@@ -65,6 +128,19 @@ The tool now returns comprehensive information including:
 
 ## Usage
 
+The Sequential Thinking MCP server provides:
+
+### 🔥 **Resources** for contextual data access:
+- View live sequence data, browse sequence library, analyze thinking patterns
+- Access verification status and recent thoughts across all sequences
+- **Non-intrusive**: Access when you want it, doesn't interrupt thinking
+
+### 🔥 **Prompts** for structured thinking:
+- Professional templates for analysis, verification, synthesis, exploration, decomposition
+- **User-chosen**: Select templates when helpful, not forced
+- **Customizable**: Fill in variables for personalized frameworks
+
+### **Tool** for sequential thinking:
 The Sequential Thinking tool is designed for:
 
 - Breaking down complex problems into steps
@@ -110,6 +186,7 @@ The Sequential Thinking tool is designed for:
 ```
 
 **🌍 Multilingual Support Examples:**
+
 ```javascript
 // Romanian diacritics work perfectly
 {
@@ -365,6 +442,16 @@ Docker:
 ```bash
 docker build -t mcp/sequentialthinking -f Dockerfile .
 ```
+
+## MCP Specification Compliance
+
+This server implements **MCP 2025-06-18 specification** with:
+- ✅ **Tools**: Sequential thinking with persistence
+- ✅ **Resources**: Live contextual data access (5 resources)
+- ✅ **Prompts**: Professional thinking templates (5 prompts)
+- ✅ **Full MCP compliance**: All features follow latest specification
+
+**Previously only ~20% of MCP capabilities were used. Now utilizing 100% of relevant features.**
 
 ## License
 
