@@ -1,0 +1,230 @@
+# Docker ignore file for Sequential Thinking MCP Server
+# Optimizes build context and reduces image size
+
+# =============================================================================
+# NODE.JS DEPENDENCIES AND BUILD ARTIFACTS
+# =============================================================================
+
+# Node modules (will be installed fresh in container)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Package manager lock files (keep package-lock.json for reproducible builds)
+yarn.lock
+pnpm-lock.yaml
+
+# =============================================================================
+# BUILD AND DIST ARTIFACTS
+# =============================================================================
+
+# TypeScript build output (will be built in container)
+dist/
+build/
+*.tsbuildinfo
+
+# Coverage reports
+coverage/
+.nyc_output/
+
+# =============================================================================
+# DEVELOPMENT AND TESTING FILES
+# =============================================================================
+
+# Test files
+test/
+tests/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+__tests__/
+
+# Development configuration
+.env.local
+.env.development
+.env.test
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# VERSION CONTROL
+# =============================================================================
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# GitHub
+.github/
+
+# =============================================================================
+# DOCUMENTATION AND README FILES
+# =============================================================================
+
+# Markdown files (except CLAUDE.md which is needed)
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE.md
+docs/
+
+# Keep CLAUDE.md as it's referenced in the application
+!CLAUDE.md
+
+# =============================================================================
+# DOCKER AND DEPLOYMENT FILES
+# =============================================================================
+
+# Docker files (not needed inside container)
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# Deployment scripts
+deploy.sh
+*.sh
+!docker-entrypoint.sh
+
+# Kubernetes manifests
+k8s/
+*.yaml
+*.yml
+
+# =============================================================================
+# LOGS AND TEMPORARY FILES
+# =============================================================================
+
+# Log files
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# =============================================================================
+# DATABASE FILES (development only)
+# =============================================================================
+
+# SQLite databases (development/local only)
+*.db
+*.sqlite
+*.sqlite3
+
+# Database backups
+*.sql
+*.dump
+
+# =============================================================================
+# ENVIRONMENT AND CONFIGURATION
+# =============================================================================
+
+# Environment files (except production template)
+.env
+.env.*
+!.env.production
+
+# Configuration files
+config/local.json
+config/development.json
+
+# =============================================================================
+# SECURITY FILES
+# =============================================================================
+
+# Private keys and certificates
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# SSH keys
+.ssh/
+id_rsa*
+id_ed25519*
+
+# =============================================================================
+# PACKAGE MANAGER CACHES
+# =============================================================================
+
+# NPM cache
+.npm/
+
+# Yarn cache
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# PNPM cache
+.pnpm-store/
+
+# =============================================================================
+# LINTING AND FORMATTING
+# =============================================================================
+
+# ESLint cache
+.eslintcache
+
+# Prettier cache
+.prettier-cache
+
+# StyleLint cache
+.stylelintcache
+
+# =============================================================================
+# MONITORING AND PROFILING
+# =============================================================================
+
+# Profiling data
+*.cpuprofile
+*.heapprofile
+*.heapsnapshot
+
+# Performance monitoring
+.clinic/
+
+# =============================================================================
+# MISC DEVELOPMENT FILES
+# =============================================================================
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Archive files
+*.tar
+*.tar.gz
+*.zip
+*.rar
+
+# Local development overrides
+local/
+.local/

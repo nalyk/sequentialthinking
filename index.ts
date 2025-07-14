@@ -19,6 +19,13 @@ import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import yargs from 'yargs';
+import { hideBin } from 'yargs/helpers';
+import { randomUUID } from 'crypto';
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1981,178 +1988,579 @@ You should:
   }
 };
 
-const server = new Server(
-  {
-    name: "sequential-thinking-server",
-    version: "0.6.2",
-  },
-  {
-    capabilities: {
-      tools: {},
-      resources: {},
-      prompts: {},
-    },
+interface ServerInstance {
+  server: Server;
+  thinkingServer: SequentialThinkingServer;
+}
+
+interface SessionData {
+  id: string;
+  transport: StreamableHTTPServerTransport;
+  serverInstance: ServerInstance;
+  createdAt: Date;
+  lastActivity: Date;
+}
+
+class SessionManager {
+  private sessions: Map<string, SessionData> = new Map();
+  private cleanupInterval: NodeJS.Timeout;
+  private readonly sessionTimeout: number = 30 * 60 * 1000; // 30 minutes
+
+  constructor() {
+    // Clean up expired sessions every 5 minutes
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupExpiredSessions();
+    }, 5 * 60 * 1000);
   }
-);
 
-const thinkingServer = new SequentialThinkingServer();
+  createSession(): SessionData {
+    const id = randomUUID();
+    const serverInstance = createMCPServer();
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => id,
+      onsessioninitialized: (sessionId: string) => {
+        console.error(`Session initialized: ${sessionId}`);
+      },
+      enableDnsRebindingProtection: true,
+      allowedHosts: ['localhost', '127.0.0.1'],
+    });
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [SEQUENTIAL_THINKING_TOOL],
-}));
+    const sessionData: SessionData = {
+      id,
+      transport,
+      serverInstance,
+      createdAt: new Date(),
+      lastActivity: new Date(),
+    };
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  if (request.params.name === "sequentialthinking") {
-    return await thinkingServer.processThought(request.params.arguments);
+    this.sessions.set(id, sessionData);
+
+    // Set up transport cleanup
+    transport.onclose = () => {
+      console.error(`Session transport closed: ${id}`);
+      this.removeSession(id);
+    };
+
+    return sessionData;
   }
 
-  return {
-    content: [{
-      type: "text",
-      text: `Unknown tool: ${request.params.name}`
-    }],
-    isError: true
-  };
-});
-
-server.setRequestHandler(ListResourcesRequestSchema, async () => {
-  return {
-    resources: [
-      {
-        uri: "sequence://current",
-        name: "Current Sequence",
-        description: "Live current thinking sequence data",
-        mimeType: "application/json"
-      },
-      {
-        uri: "sequences://library",
-        name: "Sequence Library",
-        description: "Browse all saved sequences",
-        mimeType: "application/json"
-      },
-      {
-        uri: "patterns://analysis",
-        name: "Thinking Patterns",
-        description: "User thinking patterns analysis",
-        mimeType: "application/json"
-      },
-      {
-        uri: "verification://status",
-        name: "Verification Status",
-        description: "Real-time verification dashboard",
-        mimeType: "application/json"
-      },
-      {
-        uri: "thoughts://recent",
-        name: "Recent Thoughts",
-        description: "Recent thoughts across all sequences",
-        mimeType: "application/json"
-      }
-    ]
-  };
-});
-
-server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-  const uri = request.params.uri;
-  
-  try {
-    let resourceData: object;
-    
-    switch (uri) {
-      case "sequence://current":
-        resourceData = await thinkingServer.getCurrentSequenceResource();
-        break;
-      case "sequences://library":
-        resourceData = await thinkingServer.getSequenceLibraryResource();
-        break;
-      case "patterns://analysis":
-        resourceData = await thinkingServer.getThinkingPatternsResource();
-        break;
-      case "verification://status":
-        resourceData = await thinkingServer.getVerificationStatusResource();
-        break;
-      case "thoughts://recent":
-        resourceData = await thinkingServer.getRecentThoughtsResource();
-        break;
-      default:
-        return {
-          contents: [{
-            uri,
-            mimeType: "application/json",
-            text: JSON.stringify({ error: `Unknown resource: ${uri}` }, null, 2)
-          }]
-        };
+  getSession(id: string): SessionData | undefined {
+    const session = this.sessions.get(id);
+    if (session) {
+      session.lastActivity = new Date();
     }
-    
-    return {
-      contents: [{
-        uri,
-        mimeType: "application/json",
-        text: JSON.stringify(resourceData, null, 2)
-      }]
-    };
-  } catch (error) {
-    return {
-      contents: [{
-        uri,
-        mimeType: "application/json",
-        text: JSON.stringify({ 
-          error: error instanceof Error ? error.message : String(error),
-          timestamp: new Date().toISOString()
-        }, null, 2)
-      }]
-    };
+    return session;
   }
-});
 
-server.setRequestHandler(ListPromptsRequestSchema, async () => {
-  return {
-    prompts: Object.values(THINKING_PROMPTS)
-  };
-});
+  removeSession(id: string): void {
+    const session = this.sessions.get(id);
+    if (session) {
+      try {
+        session.transport.close();
+      } catch (error) {
+        console.error(`Error closing transport for session ${id}:`, error);
+      }
+      this.sessions.delete(id);
+      console.error(`Session removed: ${id}`);
+    }
+  }
 
-server.setRequestHandler(GetPromptRequestSchema, async (request) => {
-  const name = request.params.name;
-  const args = request.params.arguments || {};
-  
-  try {
-    const promptText = thinkingServer.generatePrompt(name, args);
-    
+  private cleanupExpiredSessions(): void {
+    const now = new Date();
+    const expiredSessions: string[] = [];
+
+    for (const [id, session] of this.sessions) {
+      if (now.getTime() - session.lastActivity.getTime() > this.sessionTimeout) {
+        expiredSessions.push(id);
+      }
+    }
+
+    for (const id of expiredSessions) {
+      console.error(`Cleaning up expired session: ${id}`);
+      this.removeSession(id);
+    }
+  }
+
+  getSessionCount(): number {
+    return this.sessions.size;
+  }
+
+  getAllSessions(): SessionData[] {
+    return Array.from(this.sessions.values());
+  }
+
+  shutdown(): void {
+    clearInterval(this.cleanupInterval);
+    for (const [id] of this.sessions) {
+      this.removeSession(id);
+    }
+  }
+}
+
+function createMCPServer(): ServerInstance {
+  const server = new Server(
+    {
+      name: "sequential-thinking-server",
+      version: "0.6.2",
+    },
+    {
+      capabilities: {
+        tools: {},
+        resources: {},
+        prompts: {},
+      },
+    }
+  );
+
+  const thinkingServer = new SequentialThinkingServer();
+
+  // Set up request handlers
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: [SEQUENTIAL_THINKING_TOOL],
+  }));
+
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    if (request.params.name === "sequentialthinking") {
+      return await thinkingServer.processThought(request.params.arguments);
+    }
+
     return {
-      description: THINKING_PROMPTS[name]?.description || "Thinking framework template",
-      messages: [
+      content: [{
+        type: "text",
+        text: `Unknown tool: ${request.params.name}`
+      }],
+      isError: true
+    };
+  });
+
+  server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    return {
+      resources: [
         {
-          role: "user",
-          content: {
-            type: "text",
-            text: promptText
-          }
+          uri: "sequence://current",
+          name: "Current Sequence",
+          description: "Live current thinking sequence data",
+          mimeType: "application/json"
+        },
+        {
+          uri: "sequences://library",
+          name: "Sequence Library",
+          description: "Browse all saved sequences",
+          mimeType: "application/json"
+        },
+        {
+          uri: "patterns://analysis",
+          name: "Thinking Patterns",
+          description: "User thinking patterns analysis",
+          mimeType: "application/json"
+        },
+        {
+          uri: "verification://status",
+          name: "Verification Status",
+          description: "Real-time verification dashboard",
+          mimeType: "application/json"
+        },
+        {
+          uri: "thoughts://recent",
+          name: "Recent Thoughts",
+          description: "Recent thoughts across all sequences",
+          mimeType: "application/json"
         }
       ]
     };
-  } catch (error) {
-    return {
-      description: "Error generating prompt",
-      messages: [
-        {
-          role: "user",
-          content: {
-            type: "text",
-            text: `Error: ${error instanceof Error ? error.message : String(error)}`
-          }
-        }
-      ]
-    };
-  }
-});
+  });
 
-async function runServer() {
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const uri = request.params.uri;
+    
+    try {
+      let resourceData: object;
+      
+      switch (uri) {
+        case "sequence://current":
+          resourceData = await thinkingServer.getCurrentSequenceResource();
+          break;
+        case "sequences://library":
+          resourceData = await thinkingServer.getSequenceLibraryResource();
+          break;
+        case "patterns://analysis":
+          resourceData = await thinkingServer.getThinkingPatternsResource();
+          break;
+        case "verification://status":
+          resourceData = await thinkingServer.getVerificationStatusResource();
+          break;
+        case "thoughts://recent":
+          resourceData = await thinkingServer.getRecentThoughtsResource();
+          break;
+        default:
+          return {
+            contents: [{
+              uri,
+              mimeType: "application/json",
+              text: JSON.stringify({ error: `Unknown resource: ${uri}` }, null, 2)
+            }]
+          };
+      }
+      
+      return {
+        contents: [{
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify(resourceData, null, 2)
+        }]
+      };
+    } catch (error) {
+      return {
+        contents: [{
+          uri,
+          mimeType: "application/json",
+          text: JSON.stringify({ 
+            error: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString()
+          }, null, 2)
+        }]
+      };
+    }
+  });
+
+  server.setRequestHandler(ListPromptsRequestSchema, async () => {
+    return {
+      prompts: Object.values(THINKING_PROMPTS)
+    };
+  });
+
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const name = request.params.name;
+    const args = request.params.arguments || {};
+    
+    try {
+      const promptText = thinkingServer.generatePrompt(name, args);
+      
+      return {
+        description: THINKING_PROMPTS[name]?.description || "Thinking framework template",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: promptText
+            }
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        description: "Error generating prompt",
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `Error: ${error instanceof Error ? error.message : String(error)}`
+            }
+          }
+        ]
+      };
+    }
+  });
+
+  return { server, thinkingServer };
+}
+
+interface CLIOptions {
+  transport: 'stdio' | 'http' | 'both';
+  port: number;
+  host: string;
+  corsOrigins: string;
+  enableCors: boolean;
+}
+
+// Parse command line arguments
+const argv = yargs(hideBin(process.argv))
+  .option('transport', {
+    alias: 't',
+    describe: 'Transport method to use',
+    choices: ['stdio', 'http', 'both'] as const,
+    default: (process.env.MCP_TRANSPORT as 'stdio' | 'http' | 'both') || 'stdio',
+    type: 'string'
+  })
+  .option('port', {
+    alias: 'p',
+    describe: 'Port number for HTTP transport',
+    default: parseInt(process.env.MCP_HTTP_PORT || '3000', 10),
+    type: 'number'
+  })
+  .option('host', {
+    alias: 'h',
+    describe: 'Host address for HTTP transport',
+    default: process.env.MCP_HTTP_HOST || 'localhost',
+    type: 'string'
+  })
+  .option('cors-origins', {
+    describe: 'Comma-separated list of allowed CORS origins',
+    default: process.env.MCP_ALLOWED_ORIGINS || '',
+    type: 'string'
+  })
+  .option('enable-cors', {
+    describe: 'Enable CORS support',
+    default: (process.env.MCP_ENABLE_CORS || 'true').toLowerCase() === 'true',
+    type: 'boolean'
+  })
+  .help()
+  .parseSync() as CLIOptions;
+
+async function runStdioServer() {
+  const { server } = createMCPServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Sequential Thinking MCP Server running on stdio");
 }
 
-runServer().catch((error) => {
-  console.error("Fatal error running server:", error);
-  process.exit(1);
-});
+async function runHttpServer() {
+  console.error(`Sequential Thinking MCP Server starting on HTTP ${argv.host}:${argv.port}`);
+  
+  const app = express();
+  const sessionManager = new SessionManager();
+  
+  // Parse JSON bodies
+  app.use(express.json());
+  
+  // CORS configuration
+  if (argv.enableCors) {
+    const corsOptions: cors.CorsOptions = {
+      origin: argv.corsOrigins ? argv.corsOrigins.split(',').map(origin => origin.trim()) : '*',
+      exposedHeaders: ['Mcp-Session-Id'],
+      allowedHeaders: ['Content-Type', 'Mcp-Session-Id', 'MCP-Protocol-Version'],
+      credentials: true,
+    };
+    app.use(cors(corsOptions));
+  }
+  
+  // Protocol version header validation
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const protocolVersion = req.headers['mcp-protocol-version'];
+    if (protocolVersion && protocolVersion !== '2025-06-18') {
+      return res.status(400).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32000,
+          message: `Unsupported protocol version: ${protocolVersion}`,
+        },
+        id: null,
+      });
+    }
+    next();
+  });
+  
+  // Handle POST requests for client-to-server communication
+  app.post('/mcp', async (req: Request, res: Response) => {
+    try {
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      let session: SessionData;
+      
+      if (sessionId && sessionManager.getSession(sessionId)) {
+        // Existing session
+        session = sessionManager.getSession(sessionId)!;
+      } else if (!sessionId && isInitializeRequest(req.body)) {
+        // New initialization request
+        session = sessionManager.createSession();
+        await session.serverInstance.server.connect(session.transport);
+      } else {
+        // Invalid request
+        return res.status(400).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: 'Bad Request: No valid session ID provided or invalid initialization request',
+          },
+          id: null,
+        });
+      }
+      
+      // Handle the request
+      await session.transport.handleRequest(req, res, req.body);
+    } catch (error) {
+      console.error('Error handling MCP request:', error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32603,
+            message: 'Internal server error',
+          },
+          id: null,
+        });
+      }
+    }
+  });
+  
+  // Handle GET requests for server-to-client notifications via SSE
+  app.get('/mcp', async (req: Request, res: Response) => {
+    try {
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      if (!sessionId) {
+        return res.status(400).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: 'Bad Request: Missing session ID',
+          },
+          id: null,
+        });
+      }
+      
+      const session = sessionManager.getSession(sessionId);
+      if (!session) {
+        return res.status(404).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: 'Session not found',
+          },
+          id: null,
+        });
+      }
+      
+      await session.transport.handleRequest(req, res);
+    } catch (error) {
+      console.error('Error handling SSE request:', error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32603,
+            message: 'Internal server error',
+          },
+          id: null,
+        });
+      }
+    }
+  });
+  
+  // Handle DELETE requests for session termination
+  app.delete('/mcp', async (req: Request, res: Response) => {
+    try {
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      if (!sessionId) {
+        return res.status(400).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: 'Bad Request: Missing session ID',
+          },
+          id: null,
+        });
+      }
+      
+      const session = sessionManager.getSession(sessionId);
+      if (!session) {
+        return res.status(404).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: 'Session not found',
+          },
+          id: null,
+        });
+      }
+      
+      sessionManager.removeSession(sessionId);
+      res.status(200).json({
+        jsonrpc: '2.0',
+        result: {
+          message: 'Session terminated successfully',
+        },
+        id: null,
+      });
+    } catch (error) {
+      console.error('Error terminating session:', error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32603,
+            message: 'Internal server error',
+          },
+          id: null,
+        });
+      }
+    }
+  });
+  
+  // Health check endpoint
+  app.get('/health', (req: Request, res: Response) => {
+    res.json({
+      status: 'healthy',
+      sessions: sessionManager.getSessionCount(),
+      timestamp: new Date().toISOString(),
+    });
+  });
+  
+  // Handle 404 for unknown routes
+  app.use((req: Request, res: Response) => {
+    res.status(404).json({
+      jsonrpc: '2.0',
+      error: {
+        code: -32000,
+        message: 'Not Found',
+      },
+      id: null,
+    });
+  });
+  
+  // Start the server
+  const server = app.listen(argv.port, argv.host, () => {
+    console.error(`Sequential Thinking MCP Server listening on ${argv.host}:${argv.port}`);
+    console.error(`CORS enabled: ${argv.enableCors}`);
+    console.error(`Allowed origins: ${argv.corsOrigins || '*'}`);
+  });
+  
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    console.error('Received SIGTERM, shutting down gracefully...');
+    server.close(() => {
+      sessionManager.shutdown();
+      process.exit(0);
+    });
+  });
+  
+  process.on('SIGINT', () => {
+    console.error('Received SIGINT, shutting down gracefully...');
+    server.close(() => {
+      sessionManager.shutdown();
+      process.exit(0);
+    });
+  });
+}
+
+async function runBothServers() {
+  // Run both stdio and HTTP servers
+  console.error("Sequential Thinking MCP Server starting with both stdio and HTTP transports");
+  await Promise.all([
+    runStdioServer(),
+    runHttpServer()
+  ]);
+}
+
+async function runServer() {
+  try {
+    switch (argv.transport) {
+      case 'stdio':
+        await runStdioServer();
+        break;
+      case 'http':
+        await runHttpServer();
+        break;
+      case 'both':
+        await runBothServers();
+        break;
+      default:
+        throw new Error(`Unknown transport: ${argv.transport}`);
+    }
+  } catch (error) {
+    console.error("Fatal error running server:", error);
+    process.exit(1);
+  }
+}
+
+runServer();

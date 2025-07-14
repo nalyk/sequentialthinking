@@ -21,6 +21,7 @@ The project consists of a single main file (`index.ts`) that implements:
 The server provides **complete MCP capabilities**:
 
 ### 🔥 **RESOURCES** (5 live contextual resources)
+
 - `sequence://current` - Live current sequence data
 - `sequences://library` - Browse all saved sequences
 - `patterns://analysis` - User thinking patterns analysis with relationship insights
@@ -28,6 +29,7 @@ The server provides **complete MCP capabilities**:
 - `thoughts://recent` - Recent thoughts across all sequences with relationship data
 
 ### 🔥 **PROMPTS** (5 professional thinking templates)
+
 - `start_analysis` - Structured analysis framework
 - `hypothesis_verification` - Verification workflow template
 - `sequence_synthesis` - Synthesis template
@@ -35,6 +37,7 @@ The server provides **complete MCP capabilities**:
 - `problem_decomposition` - Problem breakdown template
 
 ### **TOOL** (Sequential thinking with persistence)
+
 The `sequentialthinking` tool facilitates step-by-step problem-solving with the ability to:
 
 - Revise previous thoughts with validation
@@ -186,16 +189,19 @@ This server has been **comprehensively transformed** from a basic tool-only impl
 ### 🎆 LATEST ENHANCEMENTS (July 2025)
 
 **Phase 1: Enhanced Content Search**
+
 - Added SQLite FTS (Full-Text Search) for searching within thought content
 - Extended `searchSequence` with `contentSearch` parameter for 10x faster access to relevant past thoughts
 - Maintains existing fuzzy search for titles/descriptions
 
 **Phase 2: Export/Import Capabilities**
+
 - Added `exportSequence` functionality for JSON backup/sharing
 - Added `importSequence` functionality to restore sequences
 - Complete sequence portability with all thoughts and metadata
 
 **Phase 3: Enhanced Relationship Utilization**
+
 - Better utilization of existing `relatedTo` field in resources
 - Added relationship analysis to `patterns://analysis` resource
 - Enhanced `thoughts://recent` to show connections and counts
@@ -396,8 +402,12 @@ The `sequentialthinking` tool now returns enhanced responses including:
 
 ## Important Instruction Reminders
 
-Do what has been asked; nothing more, nothing less.
-NEVER create files unless they're absolutely necessary for achieving your goal.
-ALWAYS prefer editing an existing file to creating a new one.
-NEVER proactively create documentation files (\*.md) or README files. Only create documentation files if explicitly requested by the User.
-Claude Code CLI does not have hot realod, so to really test it for your self, you (yes you,m Claude) need to be restarted.
+Do what you are told; nothing more, nothing less.
+
+NEVER create files unless they are absolutely necessary to achieve your goal.
+
+ALWAYS edit an existing file rather than create a new one.
+
+NEVER proactively create documentation files (\*.md) or README files. Only create documentation files if the user explicitly requests it.
+
+The Claude Code command line interface does not have hot reload functionality, so to really test it, you (yes, you, Claude) have to reboot.
