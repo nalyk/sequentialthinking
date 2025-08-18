@@ -7,6 +7,19 @@ Based on concepts from [modelcontextprotocol/servers](https://github.com/modelco
 
 An MCP server implementation that provides **tools, resources, and prompts** for dynamic and reflective problem-solving through a structured thinking process with enhanced memory management, type safety, verification workflows, and **persistent sequences** for long-term reasoning across sessions.
 
+## Python FastAPI implementation
+
+In addition to the original TypeScript code, this repository now ships a complete Python port located at `python/app/main.py`. The rewrite uses FastAPI together with the official `mcp` library and preserves the server's tools, resources and prompts while persisting sequences in SQLite.
+
+### Running the Python server
+
+```bash
+pip install -e ./python
+python python/app/main.py
+```
+
+The server exposes the MCP HTTP endpoint and supports STDIO or SSE transports through `FastMCP`.
+
 ## Features
 
 - **Structured Problem Solving**: Break down complex problems into manageable steps

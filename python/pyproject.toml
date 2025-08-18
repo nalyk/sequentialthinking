@@ -1,0 +1,11 @@
+[project]
+name = "sequentialthinking-python"
+version = "0.1.0"
+description = "FastAPI MCP server replicating Sequential Thinking"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "mcp>=1.13",
+    "pydantic>=2.0",
+]
