@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Model Context Protocol (MCP) server that implements **tools, resources, and prompts** for dynamic and reflective problem-solving. The server provides a structured thinking process that allows for revision, branching, adaptive reasoning, hypothesis testing, and verification workflows. **Updated to MCP Specification 2025-06-18 with latest TypeScript SDK v1.15.0, comprehensive reliability improvements, PERSISTENT SEQUENCES functionality, and FULL MCP CAPABILITIES implementation.**
+This is a Model Context Protocol (MCP) server that implements **tools, resources, and prompts** for dynamic and reflective problem-solving. The server provides a structured thinking process that allows for revision, branching, adaptive reasoning, hypothesis testing, and verification workflows. **Updated to MCP Specification 2025-06-18+ with TypeScript SDK v1.18.1, featuring ELICITATION (interactive tools), SAMPLING (server-side LLM requests), HATEOAS (self-discoverable API), enhanced error handling with suggested actions, comprehensive reliability improvements, PERSISTENT SEQUENCES functionality, Docker containerization, and FULL MCP CAPABILITIES implementation.**
 
 ## Architecture
 
@@ -218,14 +218,63 @@ This server has been **comprehensively transformed** from a basic tool-only impl
 7. **Branch management**: Enhanced with cleanup and navigation utilities
 8. **Verification workflow**: Integrated verification results with thinking process logic
 
-### Updated Dependencies
+### 🚀 VERSION 2.0.0 MAJOR UPGRADE (October 2025)
 
-- **@modelcontextprotocol/sdk**: 1.15.0 (latest stable)
+**This release transforms the server into a world-class, enterprise-ready MCP platform with cutting-edge interactive capabilities!**
+
+#### New Capabilities
+
+1. **ELICITATION** - Interactive tool conversations
+   - Server can ask users clarifying questions during tool execution
+   - Automatic prompting when branch IDs are missing
+   - Smart verification-to-hypothesis linking suggestions
+   - Context-aware field validation with enums
+
+2. **SAMPLING** - Server-side LLM integration
+   - Server can request LLM completions from the client
+   - Enables auto-summaries, pattern recognition, and insights
+   - Model preference hints with cost/speed/intelligence priorities
+   - Agentic behaviors within tool execution
+
+3. **HATEOAS** - Self-discoverable API
+   - Every response includes `_links` with available actions
+   - Conditional links shown only when applicable
+   - Schema hints for tool parameters
+   - Related resource discovery
+   - Agents can navigate API without documentation
+
+4. **Enhanced Error Handling**
+   - Errors categorized by type (VALIDATION_ERROR, RESOURCE_NOT_FOUND, etc.)
+   - `suggestedActions` array guides next steps
+   - `retryable` flag indicates if operation can be retried
+   - `contextualHelp` explains why error occurred
+   - Structured error responses with HATEOAS links
+
+5. **Docker Containerization**
+   - Production-ready Dockerfile with multi-stage build
+   - Docker Compose setup with volume persistence
+   - Health checks and graceful shutdown
+   - Node 20 Alpine for minimal image size
+   - Non-root user for security
+
+#### Architecture Improvements
+
+- SDK upgraded from 1.15.0 → 1.18.1 (latest features)
+- Notification debouncing for resource/tool/prompt changes
+- Structured content support readiness
+- OAuth 2.1 framework placeholders (experimental)
+- Enhanced type safety with proper interfaces
+
+### Updated Dependencies (v2.0.0)
+
+- **@modelcontextprotocol/sdk**: 1.18.1 (latest with elicitation & sampling)
 - **TypeScript**: 5.8.3 (latest stable)
 - **@types/yargs**: 17.0.33 (latest)
 - **chalk**: 5.3.0 (for colored output)
-- **🔥 NEW: sqlite3**: 5.1.6 (for persistent sequences)
-- **🔥 NEW: @types/sqlite3**: 3.1.11 (TypeScript definitions)
+- **sqlite3**: 5.1.7 (for persistent sequences)
+- **@types/sqlite3**: 3.1.11 (TypeScript definitions)
+- **express**: 4.21.2 (for HTTP transport)
+- **cors**: 2.8.5 (for CORS support)
 
 ### MCP Specification Compliance
 

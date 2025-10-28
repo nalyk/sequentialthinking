@@ -45,6 +45,50 @@ interface ThoughtData {
   relatedTo?: number[];
 }
 
+interface HATEOASLink {
+  href: string;
+  method?: string;
+  description?: string;
+  schema?: object;
+  condition?: string;
+  count?: number;
+}
+
+interface HATEOASLinks {
+  self?: HATEOASLink;
+  [key: string]: HATEOASLink | undefined;
+}
+
+interface EnhancedError {
+  error: string;
+  errorCode: string;
+  retryable: boolean;
+  suggestedActions: string[];
+  contextualHelp: string;
+  timestamp: string;
+  _links?: HATEOASLinks;
+}
+
+interface ElicitationField {
+  type: 'string' | 'number' | 'boolean' | 'enum';
+  name: string;
+  description: string;
+  required: boolean;
+  options?: Array<{ value: string; label: string }>;
+  defaultValue?: any;
+  validation?: {
+    min?: number;
+    max?: number;
+    pattern?: string;
+  };
+}
+
+interface ElicitationResponse {
+  title: string;
+  description: string;
+  fields: ElicitationField[];
+}
+
 interface SequenceRecord {
   id: string;
   title: string;
@@ -929,7 +973,7 @@ class SequentialThinkingServer {
     const currentSequence = this.currentSequenceId ? await this.loadSequence(this.currentSequenceId) : null;
     const verificationStatus = this.getVerificationStatus();
     const unverifiedHypotheses = this.getHypothesesNeedingVerification();
-    
+
     return {
       id: this.currentSequenceId,
       title: currentSequence?.title || null,
@@ -938,7 +982,8 @@ class SequentialThinkingServer {
       lastThought: this.thoughtHistory.length > 0 ? this.thoughtHistory[this.thoughtHistory.length - 1].thought : null,
       unverifiedHypothesesCount: unverifiedHypotheses.length,
       persistenceEnabled: this.currentSequenceId !== null,
-      totalBranches: Object.keys(this.branches).length
+      totalBranches: Object.keys(this.branches).length,
+      _links: this.generateHATEOASLinks('resource', { uri: 'sequence://current' })
     };
   }
 
@@ -950,7 +995,8 @@ class SequentialThinkingServer {
       recentActivity: {
         totalSequences: searchResults.totalCount,
         lastModified: searchResults.sequences.length > 0 ? searchResults.sequences[0].lastModified : null
-      }
+      },
+      _links: this.generateHATEOASLinks('resource', { uri: 'sequences://library' })
     };
   }
 
@@ -982,26 +1028,27 @@ class SequentialThinkingServer {
           branchLimit: this.maxBranches,
           thoughtsPerBranchLimit: this.maxThoughtsPerBranch
         }
-      }
+      },
+      _links: this.generateHATEOASLinks('resource', { uri: 'patterns://analysis' })
     };
   }
 
   private analyzeThoughtRelationships(): object {
     const relationships: { [key: number]: number[] } = {};
     const connectionCounts: { [key: number]: number } = {};
-    
+
     // Analyze relationships in current thought history
     this.thoughtHistory.forEach(thought => {
       if (thought.relatedTo && thought.relatedTo.length > 0) {
         relationships[thought.thoughtNumber] = thought.relatedTo;
-        
+
         // Count connections
         thought.relatedTo.forEach(relatedThought => {
           connectionCounts[relatedThought] = (connectionCounts[relatedThought] || 0) + 1;
         });
       }
     });
-    
+
     // Find most connected thoughts
     const mostConnectedThoughts = Object.entries(connectionCounts)
       .sort(([, a], [, b]) => b - a)
@@ -1011,12 +1058,12 @@ class SequentialThinkingServer {
         connections,
         thought: this.thoughtHistory.find(t => t.thoughtNumber === parseInt(thoughtNumber))?.thought.substring(0, 100) + '...' || 'Unknown'
       }));
-    
+
     // Calculate relationship density
     const totalThoughts = this.thoughtHistory.length;
     const thoughtsWithRelationships = Object.keys(relationships).length;
     const relationshipDensity = totalThoughts > 0 ? thoughtsWithRelationships / totalThoughts : 0;
-    
+
     return {
       totalRelationships: Object.keys(relationships).length,
       relationshipDensity: Math.round(relationshipDensity * 100) / 100,
@@ -1025,10 +1072,187 @@ class SequentialThinkingServer {
     };
   }
 
+  private generateHATEOASLinks(context: 'thought' | 'sequence' | 'resource', data?: any): HATEOASLinks {
+    const links: HATEOASLinks = {};
+
+    if (context === 'thought') {
+      links.self = {
+        href: "tool://sequentialthinking",
+        method: "CALL",
+        description: "Add sequential thinking steps"
+      };
+
+      if (this.currentSequenceId) {
+        links.currentSequence = {
+          href: "sequence://current",
+          method: "GET",
+          description: "View current sequence details"
+        };
+
+        links.exportSequence = {
+          href: "tool://sequentialthinking",
+          method: "CALL",
+          description: "Export current sequence as JSON",
+          schema: {
+            exportSequence: { id: this.currentSequenceId }
+          }
+        };
+      } else {
+        links.saveSequence = {
+          href: "tool://sequentialthinking",
+          method: "CALL",
+          description: "Save current thoughts as a new sequence",
+          schema: {
+            saveSequence: {
+              title: "string (required)",
+              description: "string (optional)"
+            }
+          }
+        };
+      }
+
+      links.searchSequences = {
+        href: "tool://sequentialthinking",
+        method: "CALL",
+        description: "Search for saved sequences",
+        schema: {
+          searchSequence: {
+            query: "string (optional)",
+            limit: "number (optional, 1-50)",
+            contentSearch: "boolean (optional)"
+          }
+        }
+      };
+
+      const unverifiedCount = this.getHypothesesNeedingVerification().length;
+      if (unverifiedCount > 0) {
+        links.unverifiedHypotheses = {
+          href: "verification://status",
+          method: "GET",
+          description: "View hypotheses needing verification",
+          count: unverifiedCount
+        };
+      }
+
+      links.resources = {
+        href: "resources://list",
+        method: "GET",
+        description: "View all available resources"
+      };
+
+      links.prompts = {
+        href: "prompts://list",
+        method: "GET",
+        description: "View all thinking templates"
+      };
+    } else if (context === 'sequence') {
+      links.self = {
+        href: "sequences://library",
+        method: "GET",
+        description: "Browse all saved sequences"
+      };
+
+      links.search = {
+        href: "tool://sequentialthinking",
+        method: "CALL",
+        description: "Search sequences by title, description, or content"
+      };
+
+      links.createNew = {
+        href: "tool://sequentialthinking",
+        method: "CALL",
+        description: "Start new thinking sequence"
+      };
+    } else if (context === 'resource') {
+      links.self = {
+        href: data?.uri || "resource://unknown",
+        method: "GET"
+      };
+
+      links.allResources = {
+        href: "resources://list",
+        method: "GET",
+        description: "List all available resources"
+      };
+    }
+
+    return links;
+  }
+
+  private createEnhancedError(
+    message: string,
+    code: string,
+    retryable: boolean,
+    suggestedActions: string[],
+    contextualHelp: string
+  ): EnhancedError {
+    return {
+      error: message,
+      errorCode: code,
+      retryable,
+      suggestedActions,
+      contextualHelp,
+      timestamp: new Date().toISOString(),
+      _links: this.generateHATEOASLinks('thought')
+    };
+  }
+
+  private checkForElicitationNeeds(validatedInput: SequenceThoughtData): ElicitationResponse | null {
+    // Scenario 1: Branch created without branchId
+    if (validatedInput.branchFromThought && !validatedInput.branchId) {
+      return {
+        title: "Branch Identifier Required",
+        description: "You're creating a new branch. Please provide an identifier to help track this alternative reasoning path.",
+        fields: [
+          {
+            type: "string",
+            name: "branchId",
+            description: "Identifier for this branch (e.g., 'alternative-approach', 'stakeholder-view')",
+            required: true,
+            validation: {
+              min: 1,
+              max: 100,
+              pattern: "^[a-zA-Z0-9-_]+$"
+            }
+          }
+        ]
+      };
+    }
+
+    // Scenario 2: Verification thought without related hypotheses
+    if (validatedInput.thoughtType === 'verification' &&
+        (!validatedInput.relatedTo || validatedInput.relatedTo.length === 0)) {
+      const hypotheses = this.thoughtHistory
+        .filter(t => t.thoughtType === 'hypothesis')
+        .slice(-5);  // Last 5 hypotheses
+
+      if (hypotheses.length > 0) {
+        return {
+          title: "Link Verification to Hypothesis",
+          description: "This verification should be linked to one or more hypotheses. Which hypothesis are you verifying?",
+          fields: [
+            {
+              type: "enum",
+              name: "relatedTo",
+              description: "Select the hypothesis being verified",
+              required: true,
+              options: hypotheses.map(h => ({
+                value: h.thoughtNumber.toString(),
+                label: `Thought ${h.thoughtNumber}: ${h.thought.substring(0, 80)}...`
+              }))
+            }
+          ]
+        };
+      }
+    }
+
+    return null;
+  }
+
   public async getVerificationStatusResource(): Promise<object> {
     const verificationStatus = this.getVerificationStatus();
     const unverifiedHypotheses = this.getHypothesesNeedingVerification();
-    
+
     return {
       verificationStatus,
       unverifiedHypothesesCount: unverifiedHypotheses.length,
@@ -1037,15 +1261,16 @@ class SequentialThinkingServer {
         thought: h.thought.substring(0, 100) + (h.thought.length > 100 ? '...' : ''),
         timestamp: new Date().toISOString()
       })),
-      verificationRate: verificationStatus.confirmed + verificationStatus.refuted + verificationStatus.partial + verificationStatus.pending > 0 
+      verificationRate: verificationStatus.confirmed + verificationStatus.refuted + verificationStatus.partial + verificationStatus.pending > 0
         ? verificationStatus.confirmed / (verificationStatus.confirmed + verificationStatus.refuted + verificationStatus.partial + verificationStatus.pending)
-        : 0
+        : 0,
+      _links: this.generateHATEOASLinks('resource', { uri: 'verification://status' })
     };
   }
 
   public async getRecentThoughtsResource(): Promise<object> {
     const recentThoughts = this.thoughtHistory.slice(-10);
-    
+
     return {
       recentThoughts: recentThoughts.map(thought => ({
         thoughtNumber: thought.thoughtNumber,
@@ -1064,7 +1289,8 @@ class SequentialThinkingServer {
         branchesCount: Object.keys(this.branches).length,
         hypothesesCount: this.thoughtHistory.filter(t => t.thoughtType === 'hypothesis').length,
         verificationsCount: this.thoughtHistory.filter(t => t.thoughtType === 'verification').length
-      }
+      },
+      _links: this.generateHATEOASLinks('resource', { uri: 'thoughts://recent' })
     };
   }
 
@@ -1426,9 +1652,18 @@ ${originalApproach}
 - [ ] [Third step in the process]`;
   }
 
-  public async processThought(input: unknown): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+  public async processThought(input: unknown): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean; elicitation?: ElicitationResponse }> {
     try {
       const validatedInput = this.validateSequenceThoughtData(input);
+
+      // Check for elicitation needs before processing
+      const elicitationNeeded = this.checkForElicitationNeeds(validatedInput);
+      if (elicitationNeeded) {
+        return {
+          content: [],
+          elicitation: elicitationNeeded
+        };
+      }
 
       // Handle sequence searching if requested
       if (validatedInput.searchSequence) {
@@ -1451,12 +1686,27 @@ ${originalApproach}
                 thoughtCount: seq.thoughtCount,
                 status: seq.status,
                 created: seq.created,
-                lastModified: seq.lastModified
+                lastModified: seq.lastModified,
+                _links: {
+                  load: {
+                    href: "tool://sequentialthinking",
+                    method: "CALL",
+                    description: "Load this sequence",
+                    schema: { loadSequence: { id: seq.id } }
+                  },
+                  export: {
+                    href: "tool://sequentialthinking",
+                    method: "CALL",
+                    description: "Export this sequence",
+                    schema: { exportSequence: { id: seq.id } }
+                  }
+                }
               })),
               totalCount: searchResults.totalCount,
-              message: validatedInput.searchSequence.query 
+              message: validatedInput.searchSequence.query
                 ? `Found ${searchResults.totalCount} sequences matching "${validatedInput.searchSequence.query}"`
-                : `Listed ${searchResults.totalCount} sequences`
+                : `Listed ${searchResults.totalCount} sequences`,
+              _links: this.generateHATEOASLinks('sequence')
             }, null, 2)
           }]
         };
@@ -1525,7 +1775,26 @@ ${originalApproach}
                 lastModified: sequence.lastModified
               },
               thoughtsLoaded: sequenceThoughts.length,
-              message: `Loaded sequence "${sequence.title}" with ${sequenceThoughts.length} thoughts`
+              message: `Loaded sequence "${sequence.title}" with ${sequenceThoughts.length} thoughts`,
+              _links: {
+                current: {
+                  href: "sequence://current",
+                  method: "GET",
+                  description: "View current sequence details"
+                },
+                export: {
+                  href: "tool://sequentialthinking",
+                  method: "CALL",
+                  description: "Export this sequence",
+                  schema: { exportSequence: { id: sequence.id } }
+                },
+                continueThinking: {
+                  href: "tool://sequentialthinking",
+                  method: "CALL",
+                  description: "Add more thoughts to this sequence"
+                },
+                ...this.generateHATEOASLinks('thought')
+              }
             }, null, 2)
           }]
         };
@@ -1554,7 +1823,31 @@ ${originalApproach}
               sequenceId: sequenceId,
               title: validatedInput.saveSequence.title,
               thoughtsSaved: this.thoughtHistory.length,
-              message: `Saved sequence "${validatedInput.saveSequence.title}" with ${this.thoughtHistory.length} thoughts`
+              message: `Saved sequence "${validatedInput.saveSequence.title}" with ${this.thoughtHistory.length} thoughts`,
+              _links: {
+                current: {
+                  href: "sequence://current",
+                  method: "GET",
+                  description: "View saved sequence details"
+                },
+                export: {
+                  href: "tool://sequentialthinking",
+                  method: "CALL",
+                  description: "Export this sequence",
+                  schema: { exportSequence: { id: sequenceId } }
+                },
+                search: {
+                  href: "tool://sequentialthinking",
+                  method: "CALL",
+                  description: "Search all sequences"
+                },
+                continueThinking: {
+                  href: "tool://sequentialthinking",
+                  method: "CALL",
+                  description: "Continue adding thoughts (auto-saves)"
+                },
+                ...this.generateHATEOASLinks('thought')
+              }
             }, null, 2)
           }]
         };
@@ -1597,10 +1890,10 @@ ${originalApproach}
         console.error(formattedThought);
       }
 
-      // Enhanced response with verification tracking
+      // Enhanced response with verification tracking and HATEOAS links
       const verificationStatus = this.getVerificationStatus();
       const unverifiedHypotheses = this.getHypothesesNeedingVerification();
-      
+
       const response = {
         thoughtNumber: validatedInput.thoughtNumber,
         totalThoughts: validatedInput.totalThoughts,
@@ -1626,7 +1919,8 @@ ${originalApproach}
             thoughtNumber: h.thoughtNumber,
             thought: h.thought.substring(0, 100) + (h.thought.length > 100 ? '...' : '')
           }))
-        }
+        },
+        _links: this.generateHATEOASLinks('thought')
       };
 
       return {
@@ -1636,16 +1930,88 @@ ${originalApproach}
         }]
       };
     } catch (error) {
-      const errorResponse = {
-        error: error instanceof Error ? error.message : String(error),
-        status: 'failed',
-        timestamp: new Date().toISOString()
-      };
+      // Enhanced error handling with suggested actions
+      let enhancedError: EnhancedError;
+
+      if (error instanceof Error) {
+        const message = error.message;
+
+        // Categorize errors and provide helpful guidance
+        if (message.includes('not found')) {
+          enhancedError = this.createEnhancedError(
+            message,
+            'RESOURCE_NOT_FOUND',
+            false,
+            [
+              'Verify the ID is correct',
+              'Search for available resources using searchSequence',
+              'List all sequences without a query parameter'
+            ],
+            'The requested resource (sequence, thought, or branch) could not be found in the database.'
+          );
+        } else if (message.includes('Invalid')) {
+          enhancedError = this.createEnhancedError(
+            message,
+            'VALIDATION_ERROR',
+            true,
+            [
+              'Check the input parameters match the required schema',
+              'Ensure all required fields are provided',
+              'Verify data types and value ranges'
+            ],
+            'The input provided does not meet the validation requirements. Review the error message for specific field issues.'
+          );
+        } else if (message.includes('Maximum') || message.includes('limit')) {
+          enhancedError = this.createEnhancedError(
+            message,
+            'LIMIT_EXCEEDED',
+            false,
+            [
+              'Review memory limits via environment variables',
+              'Consider completing and saving the current sequence',
+              'Start a new sequence for continued work'
+            ],
+            'A configured limit has been reached. This prevents resource exhaustion and maintains performance.'
+          );
+        } else if (message.includes('Database')) {
+          enhancedError = this.createEnhancedError(
+            message,
+            'DATABASE_ERROR',
+            true,
+            [
+              'Retry the operation',
+              'Check database file permissions',
+              'Verify disk space is available'
+            ],
+            'A database operation failed. This may be temporary - retrying often resolves the issue.'
+          );
+        } else {
+          enhancedError = this.createEnhancedError(
+            message,
+            'UNKNOWN_ERROR',
+            true,
+            [
+              'Review the error message for details',
+              'Try simplifying the operation',
+              'Contact support if the issue persists'
+            ],
+            'An unexpected error occurred during processing.'
+          );
+        }
+      } else {
+        enhancedError = this.createEnhancedError(
+          String(error),
+          'UNKNOWN_ERROR',
+          true,
+          ['Retry the operation', 'Review input parameters'],
+          'An unexpected error occurred.'
+        );
+      }
 
       return {
         content: [{
           type: "text",
-          text: JSON.stringify(errorResponse, null, 2)
+          text: JSON.stringify(enhancedError, null, 2)
         }],
         isError: true
       };
@@ -2101,13 +2467,17 @@ function createMCPServer(): ServerInstance {
   const server = new Server(
     {
       name: "sequential-thinking-server",
-      version: "0.6.2",
+      version: "2.0.0",
     },
     {
       capabilities: {
         tools: {},
         resources: {},
         prompts: {},
+        sampling: {},
+        experimental: {
+          elicitation: {}
+        }
       },
     }
   );
