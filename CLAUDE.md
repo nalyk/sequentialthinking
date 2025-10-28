@@ -218,52 +218,61 @@ This server has been **comprehensively transformed** from a basic tool-only impl
 7. **Branch management**: Enhanced with cleanup and navigation utilities
 8. **Verification workflow**: Integrated verification results with thinking process logic
 
-### 🚀 VERSION 2.0.0 MAJOR UPGRADE (October 2025)
+### 🚀 VERSION 2.0.0 MAJOR UPGRADE - "LITE" Edition (October 2025)
 
-**This release transforms the server into a world-class, enterprise-ready MCP platform with cutting-edge interactive capabilities!**
+**A focused, philosophy-respecting upgrade that keeps the server lean while adding powerful optional capabilities!**
 
-#### New Capabilities
+#### Design Philosophy: Clean by Default, Powerful When Needed
 
-1. **ELICITATION** - Interactive tool conversations
+This release respects the original sequential thinking philosophy: **clean, focused thinking without bloat**. All advanced features are **opt-in via environment variables**, ensuring the server remains lightweight and fast by default.
+
+#### New Optional Capabilities (All Disabled by Default)
+
+1. **ELICITATION** - Interactive tool conversations (`ENABLE_ELICITATION=true`)
    - Server can ask users clarifying questions during tool execution
+   - **FIXED**: Elicitation now triggers BEFORE validation throws errors
    - Automatic prompting when branch IDs are missing
    - Smart verification-to-hypothesis linking suggestions
-   - Context-aware field validation with enums
+   - **Default: OFF** - Validation errors guide users cleanly
 
-2. **SAMPLING** - Server-side LLM integration
-   - Server can request LLM completions from the client
-   - Enables auto-summaries, pattern recognition, and insights
-   - Model preference hints with cost/speed/intelligence priorities
-   - Agentic behaviors within tool execution
+2. **SAMPLING** - Server-side LLM integration (`ENABLE_SAMPLING=true`)
+   - Capability declared only when explicitly enabled
+   - Framework ready for future LLM completion requests
+   - **Default: OFF** - Not declared unless needed
 
-3. **HATEOAS** - Self-discoverable API
-   - Every response includes `_links` with available actions
-   - Conditional links shown only when applicable
-   - Schema hints for tool parameters
-   - Related resource discovery
-   - Agents can navigate API without documentation
+3. **HATEOAS** - Self-discoverable API (`ENABLE_HATEOAS=true`)
+   - When enabled: Responses include `_links` with available actions
+   - Conditional links and schema hints
+   - **Default: OFF** - Clean, minimal responses
+   - **Response size**: 515 bytes (clean) vs 1594 bytes (with HATEOAS)
+   - **3x smaller** when disabled!
 
-4. **Enhanced Error Handling**
+4. **Enhanced Error Handling** (Always On, But Lean)
    - Errors categorized by type (VALIDATION_ERROR, RESOURCE_NOT_FOUND, etc.)
    - `suggestedActions` array guides next steps
-   - `retryable` flag indicates if operation can be retried
-   - `contextualHelp` explains why error occurred
-   - Structured error responses with HATEOAS links
+   - `retryable` flag and `contextualHelp` included
+   - HATEOAS links only when `ENABLE_HATEOAS=true`
 
-5. **Docker Containerization**
-   - Production-ready Dockerfile with multi-stage build
-   - Docker Compose setup with volume persistence
-   - Health checks and graceful shutdown
-   - Node 20 Alpine for minimal image size
-   - Non-root user for security
+5. **Docker Containerization** (Always Available)
+   - Production-ready multi-stage Dockerfile
+   - docker-compose.yml with persistence
+   - Node 20 Alpine, health checks, non-root user
+
+#### Response Size Comparison
+
+| Mode | Size | Use Case |
+|------|------|----------|
+| **Clean (default)** | ~515 bytes | Fast, focused thinking |
+| **With HATEOAS** | ~1594 bytes | API exploration, discovery |
+| **Improvement** | **3x smaller!** | Respects original philosophy |
 
 #### Architecture Improvements
 
 - SDK upgraded from 1.15.0 → 1.18.1 (latest features)
-- Notification debouncing for resource/tool/prompt changes
-- Structured content support readiness
-- OAuth 2.1 framework placeholders (experimental)
 - Enhanced type safety with proper interfaces
+- Optional capabilities pattern for extensibility
+- Fixed elicitation validation order bug
+- Clean separation of concerns
 
 ### Updated Dependencies (v2.0.0)
 
@@ -305,10 +314,22 @@ This server has been **comprehensively transformed** from a basic tool-only impl
 
 ## Environment Variables
 
-- `DISABLE_THOUGHT_LOGGING`: Set to `"true"` to disable thought logging output
+### Core Configuration
+- `DISABLE_THOUGHT_LOGGING`: Set to `"true"` to disable thought logging output (default: false)
 - `MAX_THOUGHT_HISTORY`: Maximum number of thoughts to keep in history (default: 1000)
 - `MAX_BRANCHES`: Maximum number of branches to maintain (default: 50)
 - `MAX_THOUGHTS_PER_BRANCH`: Maximum thoughts per branch (default: 100)
+
+### Optional Features (v2.0 LITE)
+- `ENABLE_HATEOAS`: Set to `"true"` to include HATEOAS links in responses (default: false)
+  - **Impact**: Increases response size from ~515 bytes to ~1594 bytes
+  - **Use case**: API exploration, self-discoverable workflows
+- `ENABLE_ELICITATION`: Set to `"true"` to enable interactive prompts (default: false)
+  - **Impact**: Server can ask clarifying questions during tool execution
+  - **Use case**: Guided workflows, interactive AI assistants
+- `ENABLE_SAMPLING`: Set to `"true"` to declare sampling capability (default: false)
+  - **Impact**: Advertises ability to request LLM completions
+  - **Use case**: Future agentic AI features (framework ready)
 
 ## Tool Response Format
 
