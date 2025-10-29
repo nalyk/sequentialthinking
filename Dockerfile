@@ -30,7 +30,7 @@ RUN npm run build
 FROM node:20-alpine AS production
 
 # Install production system dependencies including build tools for SQLite3
-RUN apk add --no-cache sqlite python3 make g++ sqlite-dev
+RUN apk add --no-cache sqlite python3 make g++ sqlite-dev netcat-openbsd
 
 # Create app directory
 WORKDIR /app

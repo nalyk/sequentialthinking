@@ -208,7 +208,8 @@ class SequentialThinkingServer {
 
   private initializeDatabase(): void {
     try {
-      const dbPath = path.join(__dirname, 'sequences.db');
+      // Use environment variable DATABASE_PATH if available, otherwise fall back to default
+      const dbPath = process.env.DATABASE_PATH || process.env.DB_PATH || path.join(__dirname, 'sequences.db');
       this.db = new sqlite3.Database(dbPath);
       
       // Create tables if they don't exist
