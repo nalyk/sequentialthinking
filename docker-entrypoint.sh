@@ -55,7 +55,7 @@ export HOST="${HOST:-0.0.0.0}"
 export MCP_TRANSPORT="${MCP_TRANSPORT:-http}"
 
 # Database configuration
-export DB_PATH="${DB_PATH:-/app/data/sequences.db}"
+export DB_PATH="${DATABASE_PATH:-${DB_PATH:-/app/data/sequences.db}}"
 DB_DIR=$(dirname "$DB_PATH")
 
 log_info "Environment: $NODE_ENV"

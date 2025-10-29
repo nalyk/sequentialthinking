@@ -1,8 +1,9 @@
-# Multi-stage production Dockerfile for Sequential Thinking MCP Server
+# Multi-stage production Dockerfile for Sequential Thinking MCP Server v2.0
 # Based on Node.js TypeScript best practices for 2025
+# Supports MCP SDK 1.18.1 with elicitation, sampling, and HATEOAS
 
 # Build stage
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -26,10 +27,10 @@ RUN npx tsc --version
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine AS production
+FROM node:20-alpine AS production
 
 # Install production system dependencies including build tools for SQLite3
-RUN apk add --no-cache sqlite python3 make g++ sqlite-dev
+RUN apk add --no-cache sqlite python3 make g++ sqlite-dev netcat-openbsd
 
 # Create app directory
 WORKDIR /app

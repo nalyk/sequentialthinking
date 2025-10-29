@@ -1,0 +1,33 @@
+{
+  "name": "sequentialthinking-monorepo",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Sequential Thinking MCP Server - Monorepo with Node.js and Cloudflare implementations",
+  "workspaces": [
+    "core",
+    "node",
+    "cloudflare"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "build:core": "npm run build --workspace=@sequentialthinking/core",
+    "build:cloudflare": "npm run build --workspace=@sequentialthinking/cloudflare",
+    "dev:cloudflare": "npm run dev --workspace=@sequentialthinking/cloudflare",
+    "deploy:cloudflare": "npm run deploy --workspace=@sequentialthinking/cloudflare"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "sequential-thinking",
+    "cloudflare",
+    "durable-objects",
+    "ai",
+    "llm"
+  ],
+  "author": "Anthropic, PBC (https://anthropic.com), nalyk, Yoda.Digital",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nalyk/sequentialthinking.git"
+  }
+}

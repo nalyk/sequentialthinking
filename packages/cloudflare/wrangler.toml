@@ -1,0 +1,25 @@
+name = "sequential-thinking-mcp"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+
+# Durable Object bindings
+[[durable_objects.bindings]]
+name = "THINKING_STATE"
+class_name = "SequentialThinkingDO"
+
+# Durable Object migrations
+[[migrations]]
+tag = "v1"
+new_classes = ["SequentialThinkingDO"]
+
+# Environment variables (optional)
+[vars]
+ENABLE_HATEOAS = "false"
+ENABLE_ELICITATION = "false"
+MAX_THOUGHT_HISTORY = "1000"
+MAX_BRANCHES = "50"
+MAX_THOUGHTS_PER_BRANCH = "100"
