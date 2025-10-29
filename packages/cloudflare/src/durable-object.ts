@@ -1,4 +1,14 @@
-import type { ThoughtData, ToolResponse, VerificationStatus } from '@sequentialthinking/core';
+import type { 
+  ThoughtData, 
+  ToolResponse, 
+  VerificationStatus, 
+  HATEOASLinks, 
+  HATEOASLink,
+  ElicitationResponse,
+  ElicitationField,
+  ToolResponseWithHATEOAS,
+  DatabaseThoughtRow 
+} from '@sequentialthinking/core';
 import type { DurableObjectStorage } from '@cloudflare/workers-types';
 
 export interface Env {
@@ -125,6 +135,17 @@ export class SequentialThinkingDO implements DurableObject {
     // Validate input
     const validated = this.validateThoughtData(input);
 
+    // Check for elicitation needs if enabled
+    if (this.enableElicitation) {
+      const elicitationNeeded = this.checkForElicitationNeeds(validated);
+      if (elicitationNeeded) {
+        throw new Error(JSON.stringify({
+          type: 'elicitation',
+          elicitation: elicitationNeeded
+        }));
+      }
+    }
+
     // Store thought
     const thoughtId = await this.storeThought(validated);
 
@@ -161,6 +182,11 @@ export class SequentialThinkingDO implements DurableObject {
         }))
       }
     };
+
+    // Add HATEOAS links if enabled
+    if (this.enableHATEOAS) {
+      (response as ToolResponseWithHATEOAS)._links = this.generateHATEOASLinks('thought');
+    }
 
     return response;
   }
@@ -285,8 +311,9 @@ export class SequentialThinkingDO implements DurableObject {
       FROM thoughts
       WHERE thoughtType = 'hypothesis'
       AND thoughtNumber NOT IN (
-        SELECT DISTINCT json_each.value
-        FROM thoughts, json_each(thoughts.relatedTo)
+        SELECT DISTINCT CAST(json_each.value AS INTEGER)
+        FROM thoughts
+        JOIN json_each(thoughts.relatedTo)
         WHERE thoughtType = 'verification'
       )
       LIMIT 10
@@ -321,5 +348,119 @@ export class SequentialThinkingDO implements DurableObject {
       sequences: result.rows,
       totalCount: result.rows.length
     };
+  }
+
+  private generateHATEOASLinks(context: 'thought' | 'sequence' | 'resource', data?: any): HATEOASLinks {
+    const links: HATEOASLinks = {};
+
+    if (context === 'thought') {
+      links.self = {
+        href: "tool://sequentialthinking",
+        method: "CALL",
+        description: "Add sequential thinking steps"
+      };
+
+      links.searchSequences = {
+        href: "tool://sequentialthinking", 
+        method: "CALL",
+        description: "Search for saved sequences",
+        schema: {
+          searchSequence: {
+            query: "string (optional)",
+            limit: "number (optional, 1-50)"
+          }
+        }
+      };
+
+      links.resources = {
+        href: "resources://list",
+        method: "GET",
+        description: "View all available resources"
+      };
+
+      links.prompts = {
+        href: "prompts://list",
+        method: "GET", 
+        description: "View all thinking templates"
+      };
+    } else if (context === 'sequence') {
+      links.self = {
+        href: "sequences://library",
+        method: "GET",
+        description: "Browse all saved sequences"
+      };
+
+      links.search = {
+        href: "tool://sequentialthinking",
+        method: "CALL",
+        description: "Search sequences by title, description, or content"
+      };
+
+      links.createNew = {
+        href: "tool://sequentialthinking",
+        method: "CALL",
+        description: "Start new thinking sequence"
+      };
+    } else if (context === 'resource') {
+      links.self = {
+        href: data?.uri || "resource://unknown",
+        method: "GET"
+      };
+
+      links.allResources = {
+        href: "resources://list",
+        method: "GET",
+        description: "View all available resources"
+      };
+    }
+
+    return links;
+  }
+
+  private checkForElicitationNeeds(validatedInput: ThoughtData & { sequenceId?: string }): ElicitationResponse | null {
+    // Scenario 1: Branch created without branchId
+    if (validatedInput.branchFromThought && !validatedInput.branchId) {
+      return {
+        title: "Branch Identifier Required",
+        description: "You're creating a new branch. Please provide an identifier to help track this alternative reasoning path.",
+        fields: [
+          {
+            type: "string",
+            name: "branchId",
+            description: "Identifier for this branch (e.g., 'alternative-approach', 'stakeholder-view')",
+            required: true,
+            validation: {
+              min: 1,
+              max: 100,
+              pattern: "^[a-zA-Z0-9-_]+$"
+            }
+          }
+        ]
+      };
+    }
+
+    // Scenario 2: Verification thought without related hypotheses
+    if (validatedInput.thoughtType === 'verification' &&
+        (!validatedInput.relatedTo || validatedInput.relatedTo.length === 0)) {
+      
+      // For Cloudflare Workers, we need to get hypotheses from storage
+      return {
+        title: "Link Verification to Hypothesis",
+        description: "This verification should be linked to one or more hypotheses. Please provide the thought numbers you are verifying.",
+        fields: [
+          {
+            type: "string",
+            name: "relatedTo",
+            description: "Comma-separated thought numbers (e.g., '1,3,5')",
+            required: true,
+            validation: {
+              pattern: "^\\d+(,\\d+)*$"
+            }
+          }
+        ]
+      };
+    }
+
+    return null;
   }
 }

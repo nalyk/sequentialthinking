@@ -70,3 +70,83 @@ export interface EnhancedError {
   contextualHelp: string;
   timestamp: string;
 }
+
+export interface HATEOASLink {
+  href: string;
+  method?: string;
+  description?: string;
+  schema?: object;
+  condition?: string;
+  count?: number;
+}
+
+export interface HATEOASLinks {
+  self?: HATEOASLink;
+  [key: string]: HATEOASLink | undefined;
+}
+
+export interface ElicitationField {
+  type: 'string' | 'number' | 'boolean' | 'enum';
+  name: string;
+  description: string;
+  required: boolean;
+  options?: Array<{ value: string; label: string }>;
+  defaultValue?: any;
+  validation?: {
+    min?: number;
+    max?: number;
+    pattern?: string;
+  };
+}
+
+export interface ElicitationResponse {
+  title: string;
+  description: string;
+  fields: ElicitationField[];
+}
+
+// Database row interfaces
+export interface DatabaseSequenceRow {
+  id: string;
+  title: string;
+  description: string | null;
+  created: string;
+  lastModified: string;
+  status: string;
+  thoughtCount: number;
+}
+
+export interface DatabaseThoughtRow {
+  id: number;
+  sequenceId: string | null;
+  thoughtNumber: number;
+  thought: string;
+  totalThoughts: number;
+  isRevision: number;
+  revisesThought: number | null;
+  branchFromThought: number | null;
+  branchId: string | null;
+  nextThoughtNeeded: number;
+  thoughtType: string | null;
+  verificationResult: string | null;
+  relatedTo: string | null;
+  created: string;
+  modified: string;
+}
+
+// Resource interfaces with optional HATEOAS
+export interface BaseResourceData {
+  [key: string]: any;
+}
+
+export interface ResourceWithHATEOAS<T = BaseResourceData> extends T {
+  _links?: HATEOASLinks;
+}
+
+export interface ToolResponseWithHATEOAS extends ToolResponse {
+  _links?: HATEOASLinks;
+}
+
+export interface EnhancedErrorWithHATEOAS extends EnhancedError {
+  _links?: HATEOASLinks;
+}

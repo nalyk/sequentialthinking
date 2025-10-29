@@ -30,64 +30,22 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-interface ThoughtData {
-  thought: string;
-  thoughtNumber: number;
-  totalThoughts: number;
-  isRevision?: boolean;
-  revisesThought?: number;
-  branchFromThought?: number;
-  branchId?: string;
-  needsMoreThoughts?: boolean;
-  nextThoughtNeeded: boolean;
-  thoughtType?: 'hypothesis' | 'verification';
-  verificationResult?: 'confirmed' | 'refuted' | 'partial' | 'pending';
-  relatedTo?: number[];
-}
-
-interface HATEOASLink {
-  href: string;
-  method?: string;
-  description?: string;
-  schema?: object;
-  condition?: string;
-  count?: number;
-}
-
-interface HATEOASLinks {
-  self?: HATEOASLink;
-  [key: string]: HATEOASLink | undefined;
-}
-
-interface EnhancedError {
-  error: string;
-  errorCode: string;
-  retryable: boolean;
-  suggestedActions: string[];
-  contextualHelp: string;
-  timestamp: string;
-  _links?: HATEOASLinks;
-}
-
-interface ElicitationField {
-  type: 'string' | 'number' | 'boolean' | 'enum';
-  name: string;
-  description: string;
-  required: boolean;
-  options?: Array<{ value: string; label: string }>;
-  defaultValue?: any;
-  validation?: {
-    min?: number;
-    max?: number;
-    pattern?: string;
-  };
-}
-
-interface ElicitationResponse {
-  title: string;
-  description: string;
-  fields: ElicitationField[];
-}
+// Import types from shared core package
+import type {
+  ThoughtData,
+  HATEOASLink,
+  HATEOASLinks,
+  EnhancedError,
+  EnhancedErrorWithHATEOAS,
+  ElicitationField,
+  ElicitationResponse,
+  DatabaseSequenceRow,
+  DatabaseThoughtRow,
+  ResourceWithHATEOAS,
+  ToolResponseWithHATEOAS,
+  VerificationStatus,
+  MemoryStatus
+} from '@sequentialthinking/core';
 
 interface SequenceRecord {
   id: string;
@@ -327,7 +285,7 @@ class SequentialThinkingServer {
       this.db.get(
         'SELECT * FROM sequences WHERE id = ?',
         [id],
-        (err: Error | null, row: any) => {
+        (err: Error | null, row: DatabaseSequenceRow | undefined) => {
           if (err) {
             reject(err);
           } else if (!row) {
@@ -358,7 +316,7 @@ class SequentialThinkingServer {
       this.db.all(
         'SELECT * FROM thoughts WHERE sequenceId = ? ORDER BY thoughtNumber ASC',
         [sequenceId],
-        (err: Error | null, rows: any[]) => {
+        (err: Error | null, rows: DatabaseSequenceRow[]) => {
           if (err) {
             reject(err);
           } else {
@@ -584,7 +542,7 @@ class SequentialThinkingServer {
         this.db.all(
           'SELECT * FROM sequences ORDER BY lastModified DESC LIMIT ?',
           [limit],
-          (err: Error | null, rows: any[]) => {
+          (err: Error | null, rows: DatabaseSequenceRow[]) => {
             if (err) {
               reject(err);
             } else {
@@ -615,7 +573,7 @@ class SequentialThinkingServer {
            ORDER BY s.lastModified DESC 
            LIMIT ?`,
           [query, limit],
-          (err: Error | null, rows: any[]) => {
+          (err: Error | null, rows: DatabaseSequenceRow[]) => {
             if (err) {
               reject(err);
             } else {
@@ -637,7 +595,7 @@ class SequentialThinkingServer {
         this.db.all(
           'SELECT * FROM sequences',
           [],
-          (err: Error | null, rows: any[]) => {
+          (err: Error | null, rows: DatabaseSequenceRow[]) => {
             if (err) {
               reject(err);
             } else {
@@ -979,7 +937,16 @@ class SequentialThinkingServer {
     const verificationStatus = this.getVerificationStatus();
     const unverifiedHypotheses = this.getHypothesesNeedingVerification();
 
-    const resource: any = {
+    const resource: ResourceWithHATEOAS<{
+      id: string | null;
+      title: string | null;
+      thoughtCount: number;
+      verificationStatus: VerificationStatus;
+      lastThought: string | null;
+      unverifiedHypothesesCount: number;
+      persistenceEnabled: boolean;
+      totalBranches: number;
+    }> = {
       id: this.currentSequenceId,
       title: currentSequence?.title || null,
       thoughtCount: this.thoughtHistory.length,
@@ -999,7 +966,14 @@ class SequentialThinkingServer {
 
   public async getSequenceLibraryResource(): Promise<object> {
     const searchResults = await this.searchSequences(undefined, 50);
-    const resource: any = {
+    const resource: ResourceWithHATEOAS<{
+      sequences: SequenceRecord[];
+      totalCount: number;
+      recentActivity: {
+        totalSequences: number;
+        lastModified: Date | null;
+      };
+    }> = {
       sequences: searchResults.sequences,
       totalCount: searchResults.totalCount,
       recentActivity: {
@@ -1029,7 +1003,18 @@ class SequentialThinkingServer {
     // Analyze thought relationships from current memory
     const relationshipAnalysis = this.analyzeThoughtRelationships();
     
-    const resource: any = {
+    const resource: ResourceWithHATEOAS<{
+      totalSequences: number;
+      totalThoughts: number;
+      averageThoughtsPerSequence: number;
+      verificationRate: number;
+      relationshipPatterns: object;
+      currentMemoryUsage: {
+        thoughtHistory: number;
+        branches: number;
+        memoryLimits: MemoryStatus;
+      };
+    }> = {
       totalSequences: sequences.length,
       totalThoughts,
       averageThoughtsPerSequence: Math.round(averageThoughtsPerSequence * 100) / 100,
@@ -1092,7 +1077,7 @@ class SequentialThinkingServer {
     };
   }
 
-  private generateHATEOASLinks(context: 'thought' | 'sequence' | 'resource', data?: any): HATEOASLinks {
+  private generateHATEOASLinks(context: 'thought' | 'sequence' | 'resource', data?: { uri?: string; [key: string]: any }): HATEOASLinks {
     const links: HATEOASLinks = {};
 
     if (context === 'thought') {
@@ -1258,14 +1243,14 @@ class SequentialThinkingServer {
           description: "This verification should be linked to one or more hypotheses. Which hypothesis are you verifying?",
           fields: [
             {
-              type: "enum",
+              type: "string",
               name: "relatedTo",
-              description: "Select the hypothesis being verified",
+              description: "Enter comma-separated thought numbers being verified (e.g. '1,3,5')",
               required: true,
-              options: hypotheses.map(h => ({
-                value: h.thoughtNumber.toString(),
-                label: `Thought ${h.thoughtNumber}: ${h.thought.substring(0, 80)}...`
-              }))
+              validation: {
+                pattern: "^\\d+(,\\d+)*$"
+              },
+              defaultValue: hypotheses.map(h => h.thoughtNumber).join(',')
             }
           ]
         };
@@ -1279,7 +1264,16 @@ class SequentialThinkingServer {
     const verificationStatus = this.getVerificationStatus();
     const unverifiedHypotheses = this.getHypothesesNeedingVerification();
 
-    const resource: any = {
+    const resource: ResourceWithHATEOAS<{
+      verificationStatus: VerificationStatus;
+      unverifiedHypothesesCount: number;
+      unverifiedHypotheses: Array<{
+        thoughtNumber: number;
+        thought: string;
+        timestamp: string;
+      }>;
+      verificationRate: number;
+    }> = {
       verificationStatus,
       unverifiedHypothesesCount: unverifiedHypotheses.length,
       unverifiedHypotheses: unverifiedHypotheses.map(h => ({
@@ -1302,7 +1296,26 @@ class SequentialThinkingServer {
   public async getRecentThoughtsResource(): Promise<object> {
     const recentThoughts = this.thoughtHistory.slice(-10);
 
-    const resource: any = {
+    const resource: ResourceWithHATEOAS<{
+      recentThoughts: Array<{
+        thoughtNumber: number;
+        thought: string;
+        thoughtType?: 'hypothesis' | 'verification';
+        verificationResult?: 'confirmed' | 'refuted' | 'partial' | 'pending';
+        isRevision?: boolean;
+        branchId?: string;
+        relatedTo: number[];
+        connectionCount: number;
+        timestamp: string;
+      }>;
+      totalThoughts: number;
+      activityMetrics: {
+        revisionsCount: number;
+        branchesCount: number;
+        hypothesesCount: number;
+        verificationsCount: number;
+      };
+    }> = {
       recentThoughts: recentThoughts.map(thought => ({
         thoughtNumber: thought.thoughtNumber,
         thought: thought.thought.substring(0, 200) + (thought.thought.length > 200 ? '...' : ''),
@@ -1740,11 +1753,17 @@ ${originalApproach}
           validatedInput.searchSequence.contentSearch || false
         );
         
-        const response: any = {
+        const response: {
+          action: string;
+          query: string | null;
+          results: Array<ResourceWithHATEOAS<SequenceRecord>>;
+          totalCount: number;
+          _links?: HATEOASLinks;
+        } = {
           action: 'sequences_searched',
           query: validatedInput.searchSequence.query || null,
           results: searchResults.sequences.map(seq => {
-            const result: any = {
+            const result: ResourceWithHATEOAS<SequenceRecord> = {
               id: seq.id,
               title: seq.title,
               description: seq.description,
@@ -1973,7 +1992,7 @@ ${originalApproach}
       const verificationStatus = this.getVerificationStatus();
       const unverifiedHypotheses = this.getHypothesesNeedingVerification();
 
-      const response: any = {
+      const response: ToolResponseWithHATEOAS = {
         thoughtNumber: validatedInput.thoughtNumber,
         totalThoughts: validatedInput.totalThoughts,
         nextThoughtNeeded: validatedInput.nextThoughtNeeded,
@@ -2551,7 +2570,12 @@ function createMCPServer(): ServerInstance {
   const enableSampling = (process.env.ENABLE_SAMPLING || "false").toLowerCase() === "true";
 
   // Build capabilities object dynamically
-  const capabilities: any = {
+  const capabilities: {
+    tools: object;
+    resources: object;
+    prompts: object;
+    sampling?: object;
+  } = {
     tools: {},
     resources: {},
     prompts: {}
