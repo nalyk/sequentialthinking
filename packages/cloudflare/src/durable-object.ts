@@ -260,12 +260,13 @@ export class SequentialThinkingDO implements DurableObject {
   }
 
   private async getThoughtCount(sequenceId?: string): Promise<number> {
-    const result = await this.storage.sql.exec(
-      sequenceId 
-        ? `SELECT COUNT(*) as count FROM thoughts WHERE sequenceId = ?`
-        : `SELECT COUNT(*) as count FROM thoughts WHERE sequenceId IS NULL`,
-      sequenceId ? [sequenceId] : []
-    );
+    const query = sequenceId
+      ? `SELECT COUNT(*) as count FROM thoughts WHERE sequenceId = ?`
+      : `SELECT COUNT(*) as count FROM thoughts WHERE sequenceId IS NULL`;
+
+    const params = sequenceId ? [sequenceId] : [];
+
+    const result = await this.storage.sql.exec(query, ...params);
     
     return result.rows[0]?.count || 0;
   }
@@ -342,7 +343,7 @@ export class SequentialThinkingDO implements DurableObject {
       params = [limit];
     }
 
-    const result = await this.storage.sql.exec(sql, params);
+    const result = await this.storage.sql.exec(sql, ...params);
     
     return {
       sequences: result.rows,
